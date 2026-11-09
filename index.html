@@ -53,6 +53,12 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
 .sec-h::before{content:"";width:4px;height:18px;border-radius:2px;background:var(--main)}
 .sec.closed .grid{display:none}
 .sec.closed .ar{transform:rotate(-90deg)}
+.newcat{display:flex;gap:8px;margin-top:8px}
+.newcat[hidden]{display:none}
+.newcat input{flex:1;min-width:0;border:1px solid var(--main);background:var(--card);border-radius:12px;padding:11px 12px;outline:none;font-size:16px}
+.newcat button{flex:none;border:0;border-radius:12px;padding:0 14px;font-weight:600}
+.nc-ok{background:var(--main);color:#fff}
+.nc-no{background:var(--card);border:1px solid var(--line)!important;color:var(--sub)}
 .empty{text-align:center;color:var(--sub);padding:60px 10px}
 .fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 18px);z-index:30;width:60px;height:60px;border-radius:20px;border:0;background:var(--main);color:#fff;font-size:30px;box-shadow:0 6px 18px rgba(80,95,80,.35)}
 /* sheet */
@@ -163,6 +169,11 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     <div class="two">
       <div class="fld"><label>商品編號</label><input id="fCode" inputmode="numeric" placeholder="例：12345"></div>
       <div class="fld"><label>分類</label><select id="fCat"></select></div>
+    </div>
+    <div class="newcat" id="newCatBox" hidden>
+      <input id="newCatInput" placeholder="輸入新分類名稱" autocomplete="off">
+      <button type="button" class="nc-ok" id="newCatOk">加入</button>
+      <button type="button" class="nc-no" id="newCatCancel">取消</button>
     </div>
     <div class="fld"><label>條碼</label><input id="fBarcode" inputmode="numeric" placeholder="JAN 碼"></div>
     <div class="two">
@@ -334,6 +345,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     $('fPrice').value = it && it.price != null ? it.price : '';
     $('fSale').value = it && it.sale != null ? it.sale : '';
     $('fDate').value = today();
+    $('newCatBox').hidden = true;
     formPhotos = it ? it.photos.map(function(u){ return { kind:'old', url:u, preview:thumbUrl(u) }; }) : [];
     renderFormPhotos();
     closeSheets(); openSheet('form');
@@ -486,11 +498,23 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
   $('fSave').addEventListener('click', save);
   $('fCat').addEventListener('change', function(){
     if(this.value !== '__new__'){ this.setAttribute('data-prev', this.value); return; }
-    var v = (prompt('輸入新分類名稱') || '').trim();
-    if(v){
+    $('newCatBox').hidden = false;
+    $('newCatInput').value = '';
+    $('newCatInput').focus();
+  });
+  function newCatDone(ok){
+    var v = $('newCatInput').value.trim();
+    $('newCatBox').hidden = true;
+    if(ok && v){
       if(categories.indexOf(v) < 0) categories.push(v);
       fillCatSelect(v);
-    } else this.value = this.getAttribute('data-prev') || '';
+    } else $('fCat').value = $('fCat').getAttribute('data-prev') || '';
+    $('newCatInput').blur();
+  }
+  $('newCatOk').addEventListener('click', function(){ newCatDone(true); });
+  $('newCatCancel').addEventListener('click', function(){ newCatDone(false); });
+  $('newCatInput').addEventListener('keydown', function(e){
+    if(e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); newCatDone(true); }
   });
 
   load(false);
