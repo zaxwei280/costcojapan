@@ -73,6 +73,10 @@ body:not(.admin-on) .admin-only{display:none!important}
 .tg input:checked+span{background:var(--main)}
 .tg input:checked+span::before{transform:translateX(21px)}
 .lockinfo{font-size:12px;color:var(--sub);margin-top:10px;line-height:1.6}
+.dnav{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.dnav button{flex:1;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 6px;font-size:14px;color:var(--ink)}
+.dnav button:disabled{opacity:.35}
+.dnav span{flex:none;min-width:56px;text-align:center;font-size:12px;color:var(--sub)}
 .empty{text-align:center;color:var(--sub);padding:60px 10px}
 .fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 18px);z-index:30;width:60px;height:60px;border-radius:20px;border:0;background:var(--main);color:#fff;font-size:30px;box-shadow:0 6px 18px rgba(80,95,80,.35)}
 /* sheet */
@@ -160,6 +164,9 @@ body:not(.admin-on) .admin-only{display:none!important}
 <div class="sheet" id="detail">
   <div class="sh-head"><h2 id="dTitle"></h2><button class="iconbtn" data-close>✕</button></div>
   <div class="sh-body">
+    <div class="dnav">
+      <button id="dPrev">‹ 上一個</button><span id="dPos"></span><button id="dNext">下一個 ›</button>
+    </div>
     <div class="gallery" id="dGallery"></div>
     <div class="dots" id="dDots"></div>
     <div class="dl" id="dList"></div>
@@ -235,7 +242,7 @@ body:not(.admin-on) .admin-only{display:none!important}
 
   var items = [], categories = [], curCat = '全部', curItem = null;
   var editing = null, formPhotos = [];
-  var closedCats = {};
+  var closedCats = {}, visibleOrder = [];
   try{ closedCats = JSON.parse(localStorage.getItem('costco_closed_cats')) || {}; }catch(e){}
 
   // Cloudinary 網址自動加上縮圖參數；其他網址原樣使用
@@ -361,6 +368,8 @@ body:not(.admin-on) .admin-only{display:none!important}
     var keys = order.filter(function(c){ return groups[c]; });
     Object.keys(groups).forEach(function(k){ if(keys.indexOf(k) < 0 && k !== '未分類') keys.push(k); });
     if(groups['未分類']) keys.push('未分類');
+    visibleOrder = [];
+    keys.forEach(function(k){ groups[k].forEach(function(i){ visibleOrder.push(i.id); }); });
     $('grid').innerHTML = keys.map(function(k){
       return '<section class="sec'+(closedCats[k] ? ' closed' : '')+'"><div class="sec-h" data-sec="'+esc(k)+'">'+
         '<h3>'+esc(k)+'</h3><span class="n">'+groups[k].length+'</span><span class="ar">▼</span></div>'+
@@ -377,6 +386,11 @@ body:not(.admin-on) .admin-only{display:none!important}
   function showDetail(it){
     curItem = it;
     $('dTitle').textContent = it.name || '（未命名）';
+    var idx = visibleOrder.indexOf(it.id);
+    $('dPrev').disabled = idx <= 0;
+    $('dNext').disabled = idx < 0 || idx >= visibleOrder.length - 1;
+    $('dPos').textContent = idx >= 0 ? (idx + 1) + ' / ' + visibleOrder.length : '';
+    $('dGallery').scrollLeft = 0;
     $('dGallery').innerHTML = it.photos.length
       ? it.photos.map(function(p){ return '<img src="'+esc(bigUrl(p))+'" data-full="'+esc(p)+'" alt="">'; }).join('')
       : '<div class="thumb" style="width:100%;border-radius:16px">沒有照片</div>';
@@ -553,6 +567,20 @@ body:not(.admin-on) .admin-only{display:none!important}
   $('addBtn').addEventListener('click', function(){ openForm(null); });
   $('mask').addEventListener('click', closeSheets);
   Array.prototype.forEach.call(document.querySelectorAll('[data-close]'), function(b){ b.addEventListener('click', closeSheets); });
+  function stepDetail(d){
+    if(!curItem) return;
+    var id = visibleOrder[visibleOrder.indexOf(curItem.id) + d];
+    var it = id && items.filter(function(i){ return i.id === id; })[0];
+    if(it) showDetail(it);
+  }
+  $('dPrev').addEventListener('click', function(){ stepDetail(-1); });
+  $('dNext').addEventListener('click', function(){ stepDetail(1); });
+  document.addEventListener('keydown', function(e){
+    if(!$('detail').classList.contains('show') || $('viewer').classList.contains('show')) return;
+    if(e.key === 'ArrowLeft') stepDetail(-1);
+    else if(e.key === 'ArrowRight') stepDetail(1);
+    else if(e.key === 'Escape') closeSheets();
+  });
   $('dEdit').addEventListener('click', function(){ openForm(curItem); });
   $('dDel').addEventListener('click', del);
   $('dList').addEventListener('click', function(e){
