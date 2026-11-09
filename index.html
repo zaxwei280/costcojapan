@@ -152,9 +152,8 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     <div class="fld"><label>商品名稱 *</label><input id="fName" placeholder="例：カークランド ミックスナッツ"></div>
     <div class="two">
       <div class="fld"><label>商品編號</label><input id="fCode" inputmode="numeric" placeholder="例：12345"></div>
-      <div class="fld"><label>分類</label><input id="fCat" list="catList" placeholder="選擇或輸入"></div>
+      <div class="fld"><label>分類</label><select id="fCat"></select></div>
     </div>
-    <datalist id="catList"></datalist>
     <div class="fld"><label>條碼</label><input id="fBarcode" inputmode="numeric" placeholder="JAN 碼"></div>
     <div class="two">
       <div class="fld"><label>現場價錢（円）</label><input id="fPrice" type="number" inputmode="numeric" placeholder="0"></div>
@@ -228,7 +227,6 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     if(items.some(function(i){ return i.sale != null; })) cats.splice(1,0,'特價中');
     if(cats.indexOf(curCat) < 0) curCat = '全部';
     $('chips').innerHTML = cats.map(function(c){ return '<button class="chip'+(c===curCat?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</button>'; }).join('');
-    $('catList').innerHTML = allCats().map(function(c){ return '<option value="'+esc(c)+'">'; }).join('');
   }
   function filtered(){
     var q = $('q').value.trim().toLowerCase();
@@ -304,13 +302,22 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     $('fTitle').textContent = it ? '編輯商品' : '新增商品';
     $('fName').value = it ? it.name : '';
     $('fCode').value = it ? it.code : '';
-    $('fCat').value = it ? it.cat : (curCat !== '全部' && curCat !== '特價中' ? curCat : '');
+    fillCatSelect(it ? it.cat : (curCat !== '全部' && curCat !== '特價中' ? curCat : ''));
     $('fBarcode').value = it ? it.barcode : '';
     $('fPrice').value = it && it.price != null ? it.price : '';
     $('fSale').value = it && it.sale != null ? it.sale : '';
     formPhotos = it ? it.photos.map(function(u){ return { kind:'old', url:u, preview:thumbUrl(u) }; }) : [];
     renderFormPhotos();
     closeSheets(); openSheet('form');
+  }
+  function fillCatSelect(val){
+    var cats = allCats();
+    if(val && cats.indexOf(val) < 0) cats.push(val);
+    $('fCat').innerHTML = '<option value="">（未分類）</option>' +
+      cats.map(function(c){ return '<option value="'+esc(c)+'">'+esc(c)+'</option>'; }).join('') +
+      '<option value="__new__">＋ 新增分類…</option>';
+    $('fCat').value = val || '';
+    $('fCat').setAttribute('data-prev', $('fCat').value);
   }
   function renderFormPhotos(){
     $('fPhotos').innerHTML = formPhotos.map(function(p, idx){
@@ -429,6 +436,14 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
   });
   $('fFile').addEventListener('change', function(){ addFiles(this.files); });
   $('fSave').addEventListener('click', save);
+  $('fCat').addEventListener('change', function(){
+    if(this.value !== '__new__'){ this.setAttribute('data-prev', this.value); return; }
+    var v = (prompt('輸入新分類名稱') || '').trim();
+    if(v){
+      if(categories.indexOf(v) < 0) categories.push(v);
+      fillCatSelect(v);
+    } else this.value = this.getAttribute('data-prev') || '';
+  });
 
   load(false);
 })();
