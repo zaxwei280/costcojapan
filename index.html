@@ -77,6 +77,10 @@ body:not(.admin-on) .admin-only{display:none!important}
 .dnav button{flex:1;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 6px;font-size:14px;color:var(--ink)}
 .dnav button:disabled{opacity:.35}
 .dnav span{flex:none;min-width:56px;text-align:center;font-size:12px;color:var(--sub)}
+.pwrow{display:flex;gap:8px}
+.pwrow input{flex:1;min-width:0}
+.pw-mask{-webkit-text-security:disc;text-security:disc}
+.pweye{flex:none;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:0 14px;color:var(--sub);font-size:13px}
 .empty{text-align:center;color:var(--sub);padding:60px 10px}
 .fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 18px);z-index:30;width:60px;height:60px;border-radius:20px;border:0;background:var(--main);color:#fff;font-size:30px;box-shadow:0 6px 18px rgba(80,95,80,.35)}
 /* sheet */
@@ -217,7 +221,7 @@ body:not(.admin-on) .admin-only{display:none!important}
   <div class="sh-head"><h2>設定</h2><button class="iconbtn" data-close>✕</button></div>
   <div class="sh-body">
     <div id="lockView">
-      <div class="fld"><label>管理密碼</label><input id="pwInput" type="password" autocomplete="current-password" placeholder="輸入密碼解鎖"></div>
+      <div class="fld"><label>管理密碼</label><div class="pwrow"><input id="pwInput" type="text" class="pw-mask" inputmode="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="輸入密碼解鎖"><button type="button" id="pwEye" class="pweye">顯示</button></div></div>
       <div class="btns"><button class="btn" id="pwBtn">解鎖</button></div>
       <div class="lockinfo">一般瀏覽不需要密碼。解鎖後才能開啟新增、編輯、刪除功能。</div>
     </div>
@@ -649,6 +653,11 @@ body:not(.admin-on) .admin-only{display:none!important}
   }
   $('setBtn').addEventListener('click', openSettings);
   $('pwBtn').addEventListener('click', unlock);
+  $('pwEye').addEventListener('click', function(){
+    var m = $('pwInput').classList.toggle('pw-mask');
+    this.textContent = m ? '顯示' : '隱藏';
+    $('pwInput').focus();
+  });
   $('pwInput').addEventListener('keydown', function(e){ if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); unlock(); } });
   $('adminToggle').addEventListener('change', function(){ setShow(this.checked); applyAdmin(); toast(this.checked ? '已顯示管理功能' : '已隱藏管理功能'); });
   $('logoutBtn').addEventListener('click', function(){ setKey(''); applyAdmin(); closeSheets(); toast('已鎖定'); });
