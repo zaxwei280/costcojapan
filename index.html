@@ -215,6 +215,11 @@ body:not(.admin-on) .admin-only{display:none!important}
       <div class="fld"><label>現場價錢（円）</label><input id="fPrice" type="number" inputmode="numeric" placeholder="0"></div>
       <div class="fld"><label>現場特價（円）</label><input id="fSale" type="number" inputmode="numeric" placeholder="沒有就留空"></div>
     </div>
+    <div class="two">
+      <div class="fld"><label>特價開始</label><input id="fSaleStart" type="date"></div>
+      <div class="fld"><label>特價結束</label><input id="fSaleEnd" type="date"></div>
+    </div>
+    <div class="hint">設定期間後，過了結束日會自動顯示原價；不填期間則特價一直有效</div>
     <div class="fld"><label>更新日期</label><input id="fDate" type="date"></div>
     <div class="btns">
       <button class="btn ghost" data-close>取消</button>
@@ -367,7 +372,17 @@ body:not(.admin-on) .admin-only{display:none!important}
     if(i.price != null) return '<span class="p-now">'+yen(i.price)+'</span>';
     return '<span class="meta">未填價錢</span>';
   }
+  // 依特價期間判斷目前是否特價（saleRaw 保留 Notion 原始特價）
+  function applySale(i){
+    if(!('saleRaw' in i)) i.saleRaw = i.sale;
+    var t = today();
+    var on = i.saleRaw != null && (!i.saleStart || t >= i.saleStart) && (!i.saleEnd || t <= i.saleEnd);
+    i.sale = on ? i.saleRaw : null;
+    i.saleState = i.saleRaw == null ? '' : on ? 'on' : (i.saleStart && t < i.saleStart ? 'future' : 'ended');
+  }
+  function md(d){ return d ? d.slice(5).replace('-', '/') : ''; }
   function render(){
+    items.forEach(applySale);
     renderChips();
     var list = filtered();
     var photoCount = items.reduce(function(n,i){ return n + i.photos.length; }, 0);
@@ -377,7 +392,7 @@ body:not(.admin-on) .admin-only{display:none!important}
       var ph = i.photos[0];
       return '<div class="item" data-id="'+i.id+'"><button class="editbtn admin-only" data-edit="'+i.id+'" title="編輯">✎</button>'+
         '<div class="thumb">'+(ph ? '<img loading="lazy" src="'+esc(thumbUrl(ph))+'" alt="">' : '沒有照片')+
-          (i.sale!=null ? '<span class="salebadge">特價</span>' : '')+
+          (i.sale!=null ? '<span class="salebadge">特價'+(i.saleEnd ? ' ~'+md(i.saleEnd) : '')+'</span>' : '')+
           (i.photos.length>1 ? '<span class="cnt">'+i.photos.length+' 張</span>' : '')+'</div>'+
         '<div class="info"><div class="nm">'+esc(i.name || '（未命名）')+'</div>'+
           '<div class="meta">'+esc([i.code ? '#'+i.code : '', i.cat].filter(Boolean).join('・'))+'</div>'+
@@ -419,7 +434,12 @@ body:not(.admin-on) .admin-only{display:none!important}
     $('dDots').textContent = it.photos.length > 1 ? '左右滑動查看 ' + it.photos.length + ' 張照片' : '';
     var rows = [
       ['商品編號', it.code, true], ['分類', it.cat], ['條碼', it.barcode, true],
-      ['現場價錢', yen(it.price)], ['現場特價', it.sale!=null ? yen(it.sale) : '—'],
+      ['現場價錢', yen(it.price)],
+      ['現場特價', it.saleState === 'on' ? yen(it.sale)
+        : it.saleState === 'ended' ? '已結束（原特價 ' + yen(it.saleRaw) + '）'
+        : it.saleState === 'future' ? '尚未開始（' + yen(it.saleRaw) + '）' : '—'],
+      ['特價期間', it.saleStart || it.saleEnd ? (it.saleStart || '').replace(/-/g,'/') + ' ～ ' + (it.saleEnd ? it.saleEnd.replace(/-/g,'/') : '不限') +
+        (it.saleState === 'on' && it.saleEnd ? '（剩 ' + daysLeft(it.saleEnd) + ' 天）' : '') : ''],
       ['更新日期', it.date ? it.date.replace(/-/g,'/') : '']
     ];
     if(it.sale!=null && it.price!=null && it.price > it.sale) rows.push(['折扣', '−' + yen(it.price - it.sale)]);
@@ -439,7 +459,9 @@ body:not(.admin-on) .admin-only{display:none!important}
     fillCatSelect(it ? it.cat : (curCat !== '全部' && curCat !== '特價中' ? curCat : ''));
     $('fBarcode').value = it ? it.barcode : '';
     $('fPrice').value = it && it.price != null ? it.price : '';
-    $('fSale').value = it && it.sale != null ? it.sale : '';
+    $('fSale').value = it && it.saleRaw != null ? it.saleRaw : '';
+    $('fSaleStart').value = it ? (it.saleStart || '') : '';
+    $('fSaleEnd').value = it ? (it.saleEnd || '') : '';
     $('fDate').value = today();
     $('newCatBox').hidden = true;
     checkCodeLive();
@@ -455,6 +477,10 @@ body:not(.admin-on) .admin-only{display:none!important}
       '<option value="__new__">＋ 新增分類…</option>';
     $('fCat').value = val || '';
     $('fCat').setAttribute('data-prev', $('fCat').value);
+  }
+  function daysLeft(end){
+    var a = new Date(today() + 'T00:00:00'), b = new Date(end + 'T00:00:00');
+    return Math.round((b - a) / 86400000) + 1;
   }
   function today(){
     var d = new Date(), p = function(n){ return (n<10?'0':'') + n; };
@@ -502,9 +528,12 @@ body:not(.admin-on) .admin-only{display:none!important}
     var data = {
       name: $('fName').value.trim(), code: $('fCode').value.trim(), cat: $('fCat').value.trim(),
       barcode: $('fBarcode').value.trim(), price: $('fPrice').value.trim(), sale: $('fSale').value.trim(),
+      saleStart: $('fSaleStart').value, saleEnd: $('fSaleEnd').value,
       date: $('fDate').value
     };
     if(!data.name){ toast('請輸入商品名稱'); $('fName').focus(); return; }
+    if(data.saleEnd && !data.saleStart){ data.saleStart = today(); $('fSaleStart').value = data.saleStart; }
+    if(data.saleStart && data.saleEnd && data.saleEnd < data.saleStart){ toast('特價結束日不能早於開始日'); $('fSaleEnd').focus(); return; }
     var localDup = localDupItem(data.code);
     if(localDup){ toast('商品編號「' + data.code + '」已經存在（' + (localDup.name || '未命名') + '）'); $('fCode').focus(); return; }
     var pending = formPhotos.filter(function(p){ return p.kind === 'pending'; });
@@ -772,7 +801,7 @@ body:not(.admin-on) .admin-only{display:none!important}
 
     // 價錢
     ctx.font = '30px ' + CARD_FONT; ctx.fillStyle = '#8b857d';
-    ctx.fillText(it.sale != null ? '現場特價' : '現場價格', PAD, labelY + 10);
+    ctx.fillText(it.sale != null ? '現場特價' + (it.saleEnd ? '（至 ' + it.saleEnd.replace(/-/g,'/') + '）' : '') : '現場價格', PAD, labelY + 10);
     if(it.sale != null || it.price != null){
       var main = yen(it.sale != null ? it.sale : it.price);
       ctx.font = '800 96px ' + CARD_FONT; ctx.fillStyle = it.sale != null ? '#a8807a' : '#3d3a36';

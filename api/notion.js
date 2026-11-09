@@ -22,7 +22,8 @@ const P = {
   price: '現場價錢',  // Number
   sale: '現場特價',   // Number
   photos: '照片',     // Text（多張網址用 , 分隔）
-  date: '更新日期'    // Date
+  date: '更新日期',   // Date
+  period: '特價期間'  // Date（開始～結束）
 };
 
 async function notion(path, method = 'GET', body) {
@@ -70,6 +71,8 @@ function simplify(page) {
     sale: p[P.sale] && p[P.sale].number != null ? p[P.sale].number : null,
     photos: splitUrls(txt(p[P.photos] && p[P.photos].rich_text)),
     date: (p[P.date] && p[P.date].date && p[P.date].date.start) || '',
+    saleStart: (p[P.period] && p[P.period].date && p[P.period].date.start || '').slice(0, 10),
+    saleEnd: (p[P.period] && p[P.period].date && p[P.period].date.end || '').slice(0, 10),
     edited: page.last_edited_time
   };
 }
@@ -89,6 +92,10 @@ function buildProps(d) {
   if ('barcode' in d) props[P.barcode] = { rich_text: rich(d.barcode) };
   if ('price' in d) props[P.price] = { number: numOrNull(d.price) };
   if ('sale' in d) props[P.sale] = { number: numOrNull(d.sale) };
+  if ('saleStart' in d || 'saleEnd' in d) {
+    const s = String(d.saleStart || '').slice(0, 10), e = String(d.saleEnd || '').slice(0, 10);
+    props[P.period] = { date: s ? { start: s, end: e && e >= s ? e : null } : null };
+  }
   if ('date' in d) props[P.date] = { date: d.date ? { start: String(d.date).slice(0, 10) } : null };
   if ('photos' in d) {
     const list = Array.isArray(d.photos) ? d.photos : splitUrls(d.photos);
