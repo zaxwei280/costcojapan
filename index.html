@@ -81,6 +81,14 @@ body:not(.admin-on) .admin-only{display:none!important}
 .pwrow input{flex:1;min-width:0}
 .pw-mask{-webkit-text-security:disc;text-security:disc}
 .pweye{flex:none;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:0 14px;color:var(--sub);font-size:13px}
+.cardbtn{width:100%;margin-top:12px}
+.cardview{position:fixed;inset:0;z-index:72;background:rgba(30,28,26,.92);display:none;flex-direction:column;padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px)}
+.cardview.show{display:flex}
+.cv-img{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.cv-img img{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;-webkit-touch-callout:default}
+.cv-tip{text-align:center;color:#bbb;font-size:12px;margin:10px 0 4px}
+.cv-btns{display:flex;gap:10px;margin-top:8px;max-width:520px;width:100%;align-self:center}
+.cv-btns .btn[hidden]{display:none}
 .empty{text-align:center;color:var(--sub);padding:60px 10px}
 .fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 18px);z-index:30;width:60px;height:60px;border-radius:20px;border:0;background:var(--main);color:#fff;font-size:30px;box-shadow:0 6px 18px rgba(80,95,80,.35)}
 /* sheet */
@@ -174,6 +182,7 @@ body:not(.admin-on) .admin-only{display:none!important}
     <div class="gallery" id="dGallery"></div>
     <div class="dots" id="dDots"></div>
     <div class="dl" id="dList"></div>
+    <button class="btn ghost cardbtn" id="dCard">🪪 匯出商品小卡</button>
     <div class="btns admin-only">
       <button class="btn danger" id="dDel">刪除</button>
       <button class="btn" id="dEdit">編輯</button>
@@ -215,13 +224,22 @@ body:not(.admin-on) .admin-only{display:none!important}
 </div>
 
 <div class="viewer" id="viewer"><img id="vImg" alt=""></div>
+<div class="cardview" id="cardView">
+  <div class="cv-img"><img id="cardImg" alt="商品小卡"></div>
+  <div class="cv-tip">iPhone 也可以長按圖片 →「加入照片」</div>
+  <div class="cv-btns">
+    <button class="btn ghost" id="cardClose">關閉</button>
+    <button class="btn ghost" id="cardSave">下載</button>
+    <button class="btn" id="cardShare">分享／存相簿</button>
+  </div>
+</div>
 <div class="loading" id="loading"><div class="spin"></div><div id="loadTxt">處理中…</div></div>
 <!-- 設定 -->
 <div class="sheet" id="settings">
   <div class="sh-head"><h2>設定</h2><button class="iconbtn" data-close>✕</button></div>
   <div class="sh-body">
     <div id="lockView">
-      <div class="fld"><label>管理密碼</label><div class="pwrow"><input id="pwInput" type="text" class="pw-mask" inputmode="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="輸入密碼解鎖"><button type="button" id="pwEye" class="pweye">顯示</button></div></div>
+      <div class="fld"><label>管理密碼</label><div class="pwrow"><input id="pwInput" type="text" class="pw-mask" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="輸入數字密碼解鎖"><button type="button" id="pwEye" class="pweye">顯示</button></div></div>
       <div class="btns"><button class="btn" id="pwBtn">解鎖</button></div>
       <div class="lockinfo">一般瀏覽不需要密碼。解鎖後才能開啟新增、編輯、刪除功能。</div>
     </div>
@@ -632,6 +650,210 @@ body:not(.admin-on) .admin-only{display:none!important}
     if(e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); newCatDone(true); }
   });
 
+  // ===== 匯出商品小卡 =====
+  var CARD_FONT = '"PingFang TC","Hiragino Sans","Noto Sans TC","Microsoft JhengHei",sans-serif';
+  var cardFile = null, cardUrl = '';
+
+  function eanBits(code){
+    var L = ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
+    var G = ['0100111','0110011','0011011','0100001','0011101','0111001','0000101','0010001','0001001','0010111'];
+    var Rr = L.map(function(x){ return x.replace(/./g, function(c){ return c === '0' ? '1' : '0'; }); });
+    var PAR = ['LLLLLL','LLGLGG','LLGGLG','LLGGGL','LGLLGG','LGGLLG','LGGGLL','LGLGLG','LGLGGL','LGGLGL'];
+    var d = code.split('').map(Number), i, s;
+    if(code.length === 13){
+      s = '101';
+      for(i = 1; i <= 6; i++) s += (PAR[d[0]][i-1] === 'L' ? L : G)[d[i]];
+      s += '01010';
+      for(i = 7; i <= 12; i++) s += Rr[d[i]];
+      return s + '101';
+    }
+    if(code.length === 8){
+      s = '101';
+      for(i = 0; i < 4; i++) s += L[d[i]];
+      s += '01010';
+      for(i = 4; i < 8; i++) s += Rr[d[i]];
+      return s + '101';
+    }
+    return null;
+  }
+
+  function wrapLines(ctx, text, maxW, maxLines){
+    var lines = [], cur = '';
+    Array.from(text).forEach(function(ch){
+      if(ctx.measureText(cur + ch).width > maxW && cur){ lines.push(cur); cur = ch.trim() ? ch : ''; }
+      else cur += ch;
+    });
+    if(cur) lines.push(cur);
+    if(lines.length > maxLines){
+      lines = lines.slice(0, maxLines);
+      var last = lines[maxLines-1];
+      while(last && ctx.measureText(last + '…').width > maxW) last = last.slice(0, -1);
+      lines[maxLines-1] = last + '…';
+    }
+    return lines;
+  }
+
+  function rrect(ctx, x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath();
+  }
+
+  function loadImg(u){
+    return new Promise(function(resolve){
+      if(!u){ resolve(null); return; }
+      var img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function(){ resolve(img); };
+      img.onerror = function(){ resolve(null); };
+      img.src = cdn(u, 'c_limit,w_1200,q_auto,f_jpg');
+    });
+  }
+
+  function drawCard(it, img){
+    var W = 1080, PAD = 70, CW = W - PAD*2;
+    var m = document.createElement('canvas').getContext('2d');
+    m.font = '700 50px ' + CARD_FONT;
+    var nameLines = wrapLines(m, it.name || '（未命名）', CW, 3);
+
+    // 先算高度
+    var y = PAD + CW + 50;           // 照片下方
+    var metaY = y; y += 52 + 50;
+    var nameY = y; y += nameLines.length * 66 + 16;
+    var labelY = y; y += 44;
+    var priceY = y + 80; y = priceY + 40;
+    var lineY = y; y += 40;
+    var footY = y; y += 130;
+    var H = y + 40 + 40;
+
+    var c = document.createElement('canvas'); c.width = W; c.height = H;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#f3f0eb'; ctx.fillRect(0, 0, W, H);
+    ctx.save(); ctx.shadowColor = 'rgba(60,55,50,.10)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 6;
+    rrect(ctx, 40, 40, W-80, H-80, 40); ctx.fillStyle = '#fbfaf7'; ctx.fill(); ctx.restore();
+
+    // 照片
+    ctx.save(); rrect(ctx, PAD, PAD, CW, CW, 28); ctx.clip();
+    ctx.fillStyle = '#ebe6de'; ctx.fillRect(PAD, PAD, CW, CW);
+    if(img){
+      var s = Math.max(CW / img.naturalWidth, CW / img.naturalHeight);
+      var iw = img.naturalWidth * s, ih = img.naturalHeight * s;
+      ctx.drawImage(img, PAD + (CW-iw)/2, PAD + (CW-ih)/2, iw, ih);
+    } else {
+      ctx.fillStyle = '#8b857d'; ctx.font = '36px ' + CARD_FONT; ctx.textAlign = 'center';
+      ctx.fillText('沒有照片', W/2, PAD + CW/2); ctx.textAlign = 'left';
+    }
+    ctx.restore();
+
+    // 特價標籤
+    if(it.sale != null){
+      ctx.font = '700 38px ' + CARD_FONT;
+      var bw = ctx.measureText('特價').width + 48;
+      rrect(ctx, PAD+24, PAD+24, bw, 64, 18); ctx.fillStyle = '#c49a94'; ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText('特價', PAD+48, PAD+57); ctx.textBaseline = 'alphabetic';
+    }
+
+    // 分類＋編號
+    var x = PAD;
+    ctx.textBaseline = 'middle';
+    if(it.cat){
+      ctx.font = '600 30px ' + CARD_FONT;
+      var cw = ctx.measureText(it.cat).width + 40;
+      rrect(ctx, x, metaY, cw, 52, 26); ctx.fillStyle = '#8a9a8b'; ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.fillText(it.cat, x + 20, metaY + 27);
+      x += cw + 18;
+    }
+    if(it.code){ ctx.font = '32px ' + CARD_FONT; ctx.fillStyle = '#8b857d'; ctx.fillText('商品編號 #' + it.code, x, metaY + 27); }
+    ctx.textBaseline = 'alphabetic';
+
+    // 名稱
+    ctx.font = '700 50px ' + CARD_FONT; ctx.fillStyle = '#3d3a36';
+    nameLines.forEach(function(l, i){ ctx.fillText(l, PAD, nameY + i*66 + 10); });
+
+    // 價錢
+    ctx.font = '30px ' + CARD_FONT; ctx.fillStyle = '#8b857d';
+    ctx.fillText(it.sale != null ? '現場特價' : '現場價格', PAD, labelY + 10);
+    if(it.sale != null || it.price != null){
+      var main = yen(it.sale != null ? it.sale : it.price);
+      ctx.font = '800 96px ' + CARD_FONT; ctx.fillStyle = it.sale != null ? '#a8807a' : '#3d3a36';
+      ctx.fillText(main, PAD, priceY);
+      var mw = ctx.measureText(main).width;
+      if(it.sale != null && it.price != null){
+        var old = yen(it.price);
+        ctx.font = '44px ' + CARD_FONT; ctx.fillStyle = '#8b857d';
+        var ox = PAD + mw + 26; ctx.fillText(old, ox, priceY - 4);
+        var ow = ctx.measureText(old).width;
+        ctx.fillRect(ox - 2, priceY - 20, ow + 4, 3);
+        if(it.price > it.sale){
+          ctx.font = '600 34px ' + CARD_FONT; ctx.fillStyle = '#a8807a';
+          ctx.fillText('省 ' + yen(it.price - it.sale), ox + ow + 24, priceY - 4);
+        }
+      }
+    } else {
+      ctx.font = '600 56px ' + CARD_FONT; ctx.fillStyle = '#8b857d'; ctx.fillText('—', PAD, priceY);
+    }
+
+    // 分隔線
+    ctx.strokeStyle = '#e2ddd5'; ctx.lineWidth = 2; ctx.setLineDash([10, 10]);
+    ctx.beginPath(); ctx.moveTo(PAD, lineY); ctx.lineTo(W-PAD, lineY); ctx.stroke(); ctx.setLineDash([]);
+
+    // 底部：日期＋條碼
+    ctx.font = '28px ' + CARD_FONT; ctx.fillStyle = '#8b857d';
+    ctx.fillText('日本好市多 現場商品', PAD, footY + 40);
+    if(it.date) ctx.fillText('更新日期 ' + it.date.replace(/-/g, '/'), PAD, footY + 84);
+    var bc = String(it.barcode || '').replace(/\D/g, ''), bits = bc && eanBits(bc);
+    if(bits){
+      var mod = bits.length === 95 ? 4 : 5, bw2 = bits.length * mod, bx = W - PAD - bw2;
+      ctx.fillStyle = '#3d3a36';
+      for(var i = 0; i < bits.length; i++) if(bits[i] === '1') ctx.fillRect(bx + i*mod, footY, mod, 86);
+      ctx.font = '26px ' + CARD_FONT; ctx.textAlign = 'center';
+      ctx.fillText(bc.split('').join(' '), bx + bw2/2, footY + 120); ctx.textAlign = 'left';
+    } else if(it.barcode){
+      ctx.font = '30px ' + CARD_FONT; ctx.textAlign = 'right'; ctx.fillStyle = '#3d3a36';
+      ctx.fillText('條碼 ' + it.barcode, W - PAD, footY + 40); ctx.textAlign = 'left';
+    }
+    return c;
+  }
+
+  function canvasBlob(c){
+    return new Promise(function(resolve, reject){
+      try{ c.toBlob(function(b){ b ? resolve(b) : reject(new Error('產生圖片失敗')); }, 'image/png'); }
+      catch(e){ reject(e); }
+    });
+  }
+
+  function exportCard(){
+    if(!curItem) return;
+    var it = curItem;
+    var g = $('dGallery'), idx = g.clientWidth ? Math.round(g.scrollLeft / (g.clientWidth + 8)) : 0;
+    var photo = it.photos[Math.min(idx, it.photos.length - 1)] || it.photos[0];
+    loading(true, '製作小卡中…');
+    loadImg(photo).then(function(img){
+      // 圖片若無法跨網域使用，就改成不放照片
+      return canvasBlob(drawCard(it, img)).catch(function(){ return canvasBlob(drawCard(it, null)); });
+    }).then(function(blob){
+      var fname = ((it.code ? it.code + '_' : '') + (it.name || 'item')).replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 60) + '.png';
+      cardFile = new File([blob], fname, { type:'image/png' });
+      if(cardUrl) URL.revokeObjectURL(cardUrl);
+      cardUrl = URL.createObjectURL(blob);
+      $('cardImg').src = cardUrl;
+      $('cardShare').hidden = !(navigator.canShare && navigator.canShare({ files:[cardFile] }));
+      $('cardView').classList.add('show');
+    }).catch(function(e){ toast('匯出失敗：' + e.message); })
+      .then(function(){ loading(false); });
+  }
+
+  $('dCard').addEventListener('click', exportCard);
+  $('cardShare').addEventListener('click', function(){
+    if(cardFile) navigator.share({ files:[cardFile] }).catch(function(){});
+  });
+  $('cardSave').addEventListener('click', function(){
+    if(!cardFile) return;
+    var a = document.createElement('a'); a.href = cardUrl; a.download = cardFile.name;
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+  $('cardClose').addEventListener('click', function(){ $('cardView').classList.remove('show'); });
+
   // ===== 設定 / 密碼 =====
   function openSettings(){
     var on = !!getKey();
@@ -642,7 +864,7 @@ body:not(.admin-on) .admin-only{display:none!important}
     if(!on) setTimeout(function(){ $('pwInput').focus(); }, 300);
   }
   function unlock(){
-    var pw = $('pwInput').value;
+    var pw = $('pwInput').value.replace(/\D/g, '');
     if(!pw){ toast('請輸入密碼'); return; }
     loading(true, '驗證中…');
     fetch('/api/notion', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'auth', adminKey: pw }) })
