@@ -59,6 +59,20 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
 .newcat button{flex:none;border:0;border-radius:12px;padding:0 14px;font-weight:600}
 .nc-ok{background:var(--main);color:#fff}
 .nc-no{background:var(--card);border:1px solid var(--line)!important;color:var(--sub)}
+.codewarn{font-size:12px;color:var(--rose-d);margin-top:5px;line-height:1.4}
+.codewarn[hidden]{display:none}
+.fld input.bad{border-color:var(--rose)}
+body:not(.admin-on) .admin-only{display:none!important}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;background:var(--card);border-radius:16px;box-shadow:var(--shadow);margin-top:12px}
+.switch b{font-weight:600;display:block}
+.switch small{color:var(--sub);font-size:12px}
+.tg{position:relative;flex:none;width:52px;height:31px}
+.tg input{opacity:0;width:0;height:0;position:absolute}
+.tg span{position:absolute;inset:0;background:var(--line);border-radius:999px;transition:.2s}
+.tg span::before{content:"";position:absolute;left:3px;top:3px;width:25px;height:25px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:.2s}
+.tg input:checked+span{background:var(--main)}
+.tg input:checked+span::before{transform:translateX(21px)}
+.lockinfo{font-size:12px;color:var(--sub);margin-top:10px;line-height:1.6}
 .empty{text-align:center;color:var(--sub);padding:60px 10px}
 .fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 18px);z-index:30;width:60px;height:60px;border-radius:20px;border:0;background:var(--main);color:#fff;font-size:30px;box-shadow:0 6px 18px rgba(80,95,80,.35)}
 /* sheet */
@@ -116,6 +130,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
   <div class="top">
     <h1>好市多商品照片<small id="sub">載入中…</small></h1>
     <button class="iconbtn" id="refreshBtn" title="重新整理">↻</button>
+    <button class="iconbtn" id="setBtn" title="設定">⚙</button>
   </div>
   <div class="search">
     <input id="q" type="search" placeholder="搜尋 名稱／商品編號／條碼" autocomplete="off">
@@ -137,7 +152,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
 
 <main><div id="grid"></div><div class="empty" id="empty" hidden></div></main>
 
-<button class="fab" id="addBtn">＋</button>
+<button class="fab admin-only" id="addBtn">＋</button>
 
 <div class="mask" id="mask"></div>
 
@@ -148,7 +163,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     <div class="gallery" id="dGallery"></div>
     <div class="dots" id="dDots"></div>
     <div class="dl" id="dList"></div>
-    <div class="btns">
+    <div class="btns admin-only">
       <button class="btn danger" id="dDel">刪除</button>
       <button class="btn" id="dEdit">編輯</button>
     </div>
@@ -167,7 +182,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     </div>
     <div class="fld"><label>商品名稱 *</label><input id="fName" placeholder="例：カークランド ミックスナッツ"></div>
     <div class="two">
-      <div class="fld"><label>商品編號</label><input id="fCode" inputmode="numeric" placeholder="例：12345"></div>
+      <div class="fld"><label>商品編號</label><input id="fCode" inputmode="numeric" placeholder="例：12345"><div class="codewarn" id="codeWarn" hidden></div></div>
       <div class="fld"><label>分類</label><select id="fCat"></select></div>
     </div>
     <div class="newcat" id="newCatBox" hidden>
@@ -190,6 +205,26 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
 
 <div class="viewer" id="viewer"><img id="vImg" alt=""></div>
 <div class="loading" id="loading"><div class="spin"></div><div id="loadTxt">處理中…</div></div>
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="sh-head"><h2>設定</h2><button class="iconbtn" data-close>✕</button></div>
+  <div class="sh-body">
+    <div id="lockView">
+      <div class="fld"><label>管理密碼</label><input id="pwInput" type="password" autocomplete="current-password" placeholder="輸入密碼解鎖"></div>
+      <div class="btns"><button class="btn" id="pwBtn">解鎖</button></div>
+      <div class="lockinfo">一般瀏覽不需要密碼。解鎖後才能開啟新增、編輯、刪除功能。</div>
+    </div>
+    <div id="adminView" hidden>
+      <label class="switch">
+        <div><b>顯示管理功能</b><small>新增 ＋、編輯 ✎、刪除按鈕</small></div>
+        <span class="tg"><input type="checkbox" id="adminToggle"><span></span></span>
+      </label>
+      <div class="btns"><button class="btn ghost" id="logoutBtn">鎖定（登出）</button></div>
+      <div class="lockinfo">這個設定只會記在目前這台裝置。其他人沒有密碼，永遠看不到管理功能，也無法透過網址修改資料。</div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -217,9 +252,21 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
   function toast(t){ var e=$('toast'); e.textContent=t; e.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(function(){e.classList.remove('show');},2200); }
   function loading(on, t){ $('loadTxt').textContent = t || '處理中…'; $('loading').classList.toggle('show', !!on); }
 
+  var KEY_STORE = 'costco_admin_key', SHOW_STORE = 'costco_admin_show';
+  function getKey(){ try{ return localStorage.getItem(KEY_STORE) || ''; }catch(e){ return ''; } }
+  function setKey(k){ try{ k ? localStorage.setItem(KEY_STORE, k) : localStorage.removeItem(KEY_STORE); }catch(e){} }
+  function getShow(){ try{ return localStorage.getItem(SHOW_STORE) !== '0'; }catch(e){ return true; } }
+  function setShow(v){ try{ localStorage.setItem(SHOW_STORE, v ? '1' : '0'); }catch(e){} }
+  function applyAdmin(){ document.body.classList.toggle('admin-on', !!getKey() && getShow()); }
+
   function api(body){
+    if(getKey()) body.adminKey = getKey();
     return fetch('/api/notion', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
-      .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || ('錯誤 ' + r.status)); return j; }); });
+      .then(function(r){ return r.json().then(function(j){
+        if(r.status === 401 && body.action !== 'auth'){ setKey(''); applyAdmin(); throw new Error('管理密碼已失效，請到 ⚙ 設定重新解鎖'); }
+        if(!r.ok) throw new Error(j.error || ('錯誤 ' + r.status));
+        return j;
+      }); });
   }
 
   // ===== 快取 =====
@@ -299,7 +346,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     $('countTxt').textContent = '顯示 ' + list.length + ' 項';
     var card = function(i){
       var ph = i.photos[0];
-      return '<div class="item" data-id="'+i.id+'"><button class="editbtn" data-edit="'+i.id+'" title="編輯">✎</button>'+
+      return '<div class="item" data-id="'+i.id+'"><button class="editbtn admin-only" data-edit="'+i.id+'" title="編輯">✎</button>'+
         '<div class="thumb">'+(ph ? '<img loading="lazy" src="'+esc(thumbUrl(ph))+'" alt="">' : '沒有照片')+
           (i.sale!=null ? '<span class="salebadge">特價</span>' : '')+
           (i.photos.length>1 ? '<span class="cnt">'+i.photos.length+' 張</span>' : '')+'</div>'+
@@ -325,7 +372,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
 
   // ===== Sheet =====
   function openSheet(id){ $('mask').classList.add('show'); $(id).classList.add('show'); $(id).scrollTop = 0; }
-  function closeSheets(){ $('mask').classList.remove('show'); $('detail').classList.remove('show'); $('form').classList.remove('show'); }
+  function closeSheets(){ $('mask').classList.remove('show'); $('detail').classList.remove('show'); $('form').classList.remove('show'); $('settings').classList.remove('show'); }
 
   function showDetail(it){
     curItem = it;
@@ -359,6 +406,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     $('fSale').value = it && it.sale != null ? it.sale : '';
     $('fDate').value = today();
     $('newCatBox').hidden = true;
+    checkCodeLive();
     formPhotos = it ? it.photos.map(function(u){ return { kind:'old', url:u, preview:thumbUrl(u) }; }) : [];
     renderFormPhotos();
     closeSheets(); openSheet('form');
@@ -421,10 +469,17 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
       date: $('fDate').value
     };
     if(!data.name){ toast('請輸入商品名稱'); $('fName').focus(); return; }
+    var localDup = localDupItem(data.code);
+    if(localDup){ toast('商品編號「' + data.code + '」已經存在（' + (localDup.name || '未命名') + '）'); $('fCode').focus(); return; }
     var pending = formPhotos.filter(function(p){ return p.kind === 'pending'; });
     var done = 0;
-    loading(true, pending.length ? '上傳照片 0/' + pending.length : '儲存中…');
-    var chain = Promise.resolve();
+    loading(true, '檢查商品編號…');
+    // 上傳照片前先向 Notion 確認編號沒有重複，避免白白上傳
+    var chain = (data.code ? api({ action:'checkCode', code:data.code, pageId: editing ? editing.id : '' }) : Promise.resolve({}))
+      .then(function(r){
+        if(r.duplicate) throw new Error('商品編號「' + data.code + '」已經存在（' + r.name + '），不能重複');
+        $('loadTxt').textContent = pending.length ? '上傳照片 0/' + pending.length : '儲存中…';
+      });
     pending.forEach(function(p){
       chain = chain.then(function(){
         return api({ action:'upload', contentType:'image/jpeg', data:p.preview.split(',')[1] });
@@ -443,8 +498,22 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
       if(data.cat && categories.indexOf(data.cat) < 0) categories.push(data.cat);
       writeCache(); render(); closeSheets();
       toast(editing ? '已更新' : '已新增');
-    }).catch(function(e){ toast('儲存失敗：' + e.message); })
-      .then(function(){ loading(false); });
+    }).catch(function(e){
+      toast('儲存失敗：' + e.message);
+      if(/商品編號/.test(e.message)){ $('fCode').classList.add('bad'); $('fCode').focus(); }
+    }).then(function(){ loading(false); });
+  }
+
+  function localDupItem(code){
+    code = String(code || '').trim();
+    if(!code) return null;
+    return items.filter(function(i){ return i.code.trim() === code && (!editing || i.id !== editing.id); })[0] || null;
+  }
+  function checkCodeLive(){
+    var d = localDupItem($('fCode').value);
+    $('codeWarn').hidden = !d;
+    $('codeWarn').textContent = d ? '⚠ 此編號已被「' + (d.name || '未命名') + '」使用' : '';
+    $('fCode').classList.toggle('bad', !!d);
   }
 
   function del(){
@@ -509,6 +578,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
   });
   $('fFile').addEventListener('change', function(){ addFiles(this.files); });
   $('fSave').addEventListener('click', save);
+  $('fCode').addEventListener('input', checkCodeLive);
   $('fCat').addEventListener('change', function(){
     if(this.value !== '__new__'){ this.setAttribute('data-prev', this.value); return; }
     $('newCatBox').hidden = false;
@@ -530,6 +600,32 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     if(e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); newCatDone(true); }
   });
 
+  // ===== 設定 / 密碼 =====
+  function openSettings(){
+    var on = !!getKey();
+    $('lockView').hidden = on; $('adminView').hidden = !on;
+    $('adminToggle').checked = getShow();
+    $('pwInput').value = '';
+    closeSheets(); openSheet('settings');
+    if(!on) setTimeout(function(){ $('pwInput').focus(); }, 300);
+  }
+  function unlock(){
+    var pw = $('pwInput').value;
+    if(!pw){ toast('請輸入密碼'); return; }
+    loading(true, '驗證中…');
+    fetch('/api/notion', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'auth', adminKey: pw }) })
+      .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || '驗證失敗'); }); })
+      .then(function(){ setKey(pw); setShow(true); applyAdmin(); openSettings(); toast('已解鎖'); })
+      .catch(function(e){ toast(e.message); $('pwInput').select(); })
+      .then(function(){ loading(false); });
+  }
+  $('setBtn').addEventListener('click', openSettings);
+  $('pwBtn').addEventListener('click', unlock);
+  $('pwInput').addEventListener('keydown', function(e){ if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); unlock(); } });
+  $('adminToggle').addEventListener('change', function(){ setShow(this.checked); applyAdmin(); toast(this.checked ? '已顯示管理功能' : '已隱藏管理功能'); });
+  $('logoutBtn').addEventListener('click', function(){ setKey(''); applyAdmin(); closeSheets(); toast('已鎖定'); });
+
+  applyAdmin();
   load(false);
 })();
 </script>

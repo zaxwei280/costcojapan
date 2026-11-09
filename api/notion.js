@@ -6,6 +6,7 @@
 //   CLOUDINARY_API_KEY      Cloudinary API Key
 //   CLOUDINARY_API_SECRET   Cloudinary API Secret
 //   CLOUDINARY_FOLDER       （選填）存放資料夾，預設 costco
+//   ADMIN_PASSWORD          管理密碼（新增／編輯／刪除／上傳都需要）
 
 const crypto = require('crypto');
 
@@ -121,6 +122,34 @@ async function uploadCloudinary(base64, contentType) {
   return j.secure_url;
 }
 
+// 查詢商品編號是否已存在（排除自己），回傳重複的商品名稱，沒有則回傳 null
+async function findDupCode(DB, code, excludeId) {
+  code = String(code || '').trim();
+  if (!code) return null;
+  const q = await notion('/databases/' + DB + '/query', 'POST', {
+    page_size: 10,
+    filter: { property: P.code, rich_text: { equals: code } }
+  });
+  const norm = id => String(id || '').replace(/-/g, '');
+  const hit = q.results.find(p => norm(p.id) !== norm(excludeId));
+  return hit ? (txt(hit.properties[P.name] && hit.properties[P.name].title) || '（未命名）') : null;
+}
+
+function dupMsg(code, name) {
+  return '商品編號「' + code + '」已經存在（' + name + '），不能重複';
+}
+
+// 需要管理密碼的動作
+const WRITE_ACTIONS = ['upload', 'create', 'update', 'archive', 'checkCode', 'auth'];
+
+function passOk(input) {
+  const pw = process.env.ADMIN_PASSWORD || '';
+  if (!pw || typeof input !== 'string') return false;
+  const a = crypto.createHash('sha256').update(input).digest();
+  const c = crypto.createHash('sha256').update(pw).digest();
+  return crypto.timingSafeEqual(a, c);
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: '只接受 POST' });
   if (!process.env.NOTION_TOKEN || !process.env.NOTION_DB_ID) {
@@ -128,6 +157,15 @@ module.exports = async (req, res) => {
   }
   const DB = process.env.NOTION_DB_ID;
   const b = (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body) || {};
+
+  if (WRITE_ACTIONS.indexOf(b.action) >= 0) {
+    if (!process.env.ADMIN_PASSWORD) return res.status(500).json({ error: '尚未設定環境變數 ADMIN_PASSWORD' });
+    if (!passOk(b.adminKey)) {
+      await new Promise(r => setTimeout(r, 800)); // 減緩暴力猜密碼
+      return res.status(401).json({ error: '密碼錯誤', auth: false });
+    }
+    if (b.action === 'auth') return res.json({ ok: true });
+  }
 
   try {
     switch (b.action) {
@@ -158,13 +196,26 @@ module.exports = async (req, res) => {
         return res.json({ url });
       }
 
+      case 'checkCode': {
+        const name = await findDupCode(DB, b.code, b.pageId);
+        return res.json({ duplicate: !!name, name });
+      }
+
       case 'create': {
+        if (b.data && b.data.code) {
+          const dup = await findDupCode(DB, b.data.code);
+          if (dup) return res.status(409).json({ error: dupMsg(String(b.data.code).trim(), dup) });
+        }
         const page = await notion('/pages', 'POST', { parent: { database_id: DB }, properties: buildProps(b.data) });
         return res.json({ item: simplify(page) });
       }
 
       case 'update': {
         if (!b.pageId) return res.status(400).json({ error: '缺少 pageId' });
+        if (b.data && b.data.code) {
+          const dup = await findDupCode(DB, b.data.code, b.pageId);
+          if (dup) return res.status(409).json({ error: dupMsg(String(b.data.code).trim(), dup) });
+        }
         const page = await notion('/pages/' + b.pageId, 'PATCH', { properties: buildProps(b.data) });
         return res.json({ item: simplify(page) });
       }
