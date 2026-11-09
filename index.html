@@ -32,7 +32,8 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);padding:calc(env(sa
 .bar select{border:0;background:transparent;color:var(--sub);font-size:12px}
 main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
-.item{background:var(--card);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);cursor:pointer;display:flex;flex-direction:column}
+.item{position:relative;background:var(--card);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);cursor:pointer;display:flex;flex-direction:column}
+.editbtn{position:absolute;top:6px;right:6px;z-index:2;width:32px;height:32px;border-radius:10px;border:0;background:rgba(251,250,247,.92);color:var(--main-d);font-size:15px;box-shadow:var(--shadow)}
 .thumb{position:relative;aspect-ratio:1/1;background:#ebe6de;display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:12px}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .cnt{position:absolute;right:6px;bottom:6px;background:rgba(40,38,35,.55);color:#fff;font-size:11px;border-radius:8px;padding:2px 6px}
@@ -115,6 +116,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
       <option value="priceAsc">價錢 低→高</option>
       <option value="priceDesc">價錢 高→低</option>
       <option value="sale">特價優先</option>
+      <option value="date">更新日期 新→舊</option>
     </select>
   </div>
 </header>
@@ -159,6 +161,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
       <div class="fld"><label>現場價錢（円）</label><input id="fPrice" type="number" inputmode="numeric" placeholder="0"></div>
       <div class="fld"><label>現場特價（円）</label><input id="fSale" type="number" inputmode="numeric" placeholder="沒有就留空"></div>
     </div>
+    <div class="fld"><label>更新日期</label><input id="fDate" type="date"></div>
     <div class="btns">
       <button class="btn ghost" data-close>取消</button>
       <button class="btn" id="fSave">儲存</button>
@@ -172,7 +175,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
 
 <script>
 (function(){
-  var CACHE_KEY = 'costco_photo_cache_v2';
+  var CACHE_KEY = 'costco_photo_cache_v3';
   var CACHE_TTL = 10 * 60 * 1000; // 10 分鐘
   var MAX_SIDE = 1600, JPEG_Q = 0.82;
 
@@ -243,6 +246,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
       if(s==='code') return a.code.localeCompare(b.code,'ja',{numeric:true});
       if(s==='priceAsc') return eff(a) - eff(b);
       if(s==='priceDesc') return (eff(b)===Infinity?-1:eff(b)) - (eff(a)===Infinity?-1:eff(a));
+      if(s==='date') return (b.date||'').localeCompare(a.date||'') || b.edited.localeCompare(a.edited);
       if(s==='sale') return (b.sale!=null) - (a.sale!=null) || b.edited.localeCompare(a.edited);
       return b.edited.localeCompare(a.edited);
     });
@@ -261,12 +265,13 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     $('countTxt').textContent = '顯示 ' + list.length + ' 項';
     $('grid').innerHTML = list.map(function(i){
       var ph = i.photos[0];
-      return '<div class="item" data-id="'+i.id+'">'+
+      return '<div class="item" data-id="'+i.id+'"><button class="editbtn" data-edit="'+i.id+'" title="編輯">✎</button>'+
         '<div class="thumb">'+(ph ? '<img loading="lazy" src="'+esc(thumbUrl(ph))+'" alt="">' : '沒有照片')+
           (i.sale!=null ? '<span class="salebadge">特價</span>' : '')+
           (i.photos.length>1 ? '<span class="cnt">'+i.photos.length+' 張</span>' : '')+'</div>'+
         '<div class="info"><div class="nm">'+esc(i.name || '（未命名）')+'</div>'+
           '<div class="meta">'+esc([i.code ? '#'+i.code : '', i.cat].filter(Boolean).join('・'))+'</div>'+
+          (i.date ? '<div class="meta">更新 '+esc(i.date.replace(/-/g,'/'))+'</div>' : '')+
           '<div class="prices">'+priceHtml(i)+'</div></div></div>';
     }).join('');
     $('empty').hidden = list.length > 0;
@@ -286,7 +291,8 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     $('dDots').textContent = it.photos.length > 1 ? '左右滑動查看 ' + it.photos.length + ' 張照片' : '';
     var rows = [
       ['商品編號', it.code, true], ['分類', it.cat], ['條碼', it.barcode, true],
-      ['現場價錢', yen(it.price)], ['現場特價', it.sale!=null ? yen(it.sale) : '—']
+      ['現場價錢', yen(it.price)], ['現場特價', it.sale!=null ? yen(it.sale) : '—'],
+      ['更新日期', it.date ? it.date.replace(/-/g,'/') : '']
     ];
     if(it.sale!=null && it.price!=null && it.price > it.sale) rows.push(['折扣', '−' + yen(it.price - it.sale)]);
     $('dList').innerHTML = rows.map(function(r){
@@ -306,6 +312,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     $('fBarcode').value = it ? it.barcode : '';
     $('fPrice').value = it && it.price != null ? it.price : '';
     $('fSale').value = it && it.sale != null ? it.sale : '';
+    $('fDate').value = today();
     formPhotos = it ? it.photos.map(function(u){ return { kind:'old', url:u, preview:thumbUrl(u) }; }) : [];
     renderFormPhotos();
     closeSheets(); openSheet('form');
@@ -318,6 +325,10 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
       '<option value="__new__">＋ 新增分類…</option>';
     $('fCat').value = val || '';
     $('fCat').setAttribute('data-prev', $('fCat').value);
+  }
+  function today(){
+    var d = new Date(), p = function(n){ return (n<10?'0':'') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
   }
   function renderFormPhotos(){
     $('fPhotos').innerHTML = formPhotos.map(function(p, idx){
@@ -360,7 +371,8 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
   function save(){
     var data = {
       name: $('fName').value.trim(), code: $('fCode').value.trim(), cat: $('fCat').value.trim(),
-      barcode: $('fBarcode').value.trim(), price: $('fPrice').value.trim(), sale: $('fSale').value.trim()
+      barcode: $('fBarcode').value.trim(), price: $('fPrice').value.trim(), sale: $('fSale').value.trim(),
+      date: $('fDate').value
     };
     if(!data.name){ toast('請輸入商品名稱'); $('fName').focus(); return; }
     var pending = formPhotos.filter(function(p){ return p.kind === 'pending'; });
@@ -403,6 +415,13 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
   $('sort').addEventListener('change', render);
   $('chips').addEventListener('click', function(e){ var b = e.target.closest('.chip'); if(b){ curCat = b.getAttribute('data-c'); render(); } });
   $('grid').addEventListener('click', function(e){
+    var eb = e.target.closest('[data-edit]');
+    if(eb){
+      e.stopPropagation();
+      var t = items.filter(function(i){ return i.id === eb.getAttribute('data-edit'); })[0];
+      if(t) openForm(t);
+      return;
+    }
     var el = e.target.closest('.item'); if(!el) return;
     var it = items.filter(function(i){ return i.id === el.getAttribute('data-id'); })[0];
     if(it) showDetail(it);

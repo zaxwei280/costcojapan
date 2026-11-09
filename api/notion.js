@@ -20,7 +20,8 @@ const P = {
   barcode: '條碼',    // Text
   price: '現場價錢',  // Number
   sale: '現場特價',   // Number
-  photos: '照片'      // Text（多張網址用 , 分隔）
+  photos: '照片',     // Text（多張網址用 , 分隔）
+  date: '更新日期'    // Date
 };
 
 async function notion(path, method = 'GET', body) {
@@ -67,6 +68,7 @@ function simplify(page) {
     price: p[P.price] && p[P.price].number != null ? p[P.price].number : null,
     sale: p[P.sale] && p[P.sale].number != null ? p[P.sale].number : null,
     photos: splitUrls(txt(p[P.photos] && p[P.photos].rich_text)),
+    date: (p[P.date] && p[P.date].date && p[P.date].date.start) || '',
     edited: page.last_edited_time
   };
 }
@@ -86,6 +88,7 @@ function buildProps(d) {
   if ('barcode' in d) props[P.barcode] = { rich_text: rich(d.barcode) };
   if ('price' in d) props[P.price] = { number: numOrNull(d.price) };
   if ('sale' in d) props[P.sale] = { number: numOrNull(d.sale) };
+  if ('date' in d) props[P.date] = { date: d.date ? { start: String(d.date).slice(0, 10) } : null };
   if ('photos' in d) {
     const list = Array.isArray(d.photos) ? d.photos : splitUrls(d.photos);
     props[P.photos] = { rich_text: rich(list.join(',')) };
