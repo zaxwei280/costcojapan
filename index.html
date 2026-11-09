@@ -45,6 +45,14 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
 .p-now{font-weight:600;font-size:15px}
 .p-sale{font-weight:700;font-size:15px;color:var(--rose-d)}
 .p-old{font-size:12px;color:var(--sub);text-decoration:line-through}
+.sec{margin-bottom:22px}
+.sec-h{display:flex;align-items:center;gap:8px;padding:10px 2px 10px;cursor:pointer;user-select:none}
+.sec-h h3{margin:0;font-size:16px;letter-spacing:.5px}
+.sec-h .n{font-size:12px;color:var(--sub);background:var(--card);border-radius:999px;padding:2px 9px}
+.sec-h .ar{margin-left:auto;color:var(--sub);font-size:12px;transition:transform .2s}
+.sec-h::before{content:"";width:4px;height:18px;border-radius:2px;background:var(--main)}
+.sec.closed .grid{display:none}
+.sec.closed .ar{transform:rotate(-90deg)}
 .empty{text-align:center;color:var(--sub);padding:60px 10px}
 .fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 18px);z-index:30;width:60px;height:60px;border-radius:20px;border:0;background:var(--main);color:#fff;font-size:30px;box-shadow:0 6px 18px rgba(80,95,80,.35)}
 /* sheet */
@@ -121,7 +129,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
   </div>
 </header>
 
-<main><div class="grid" id="grid"></div><div class="empty" id="empty" hidden></div></main>
+<main><div id="grid"></div><div class="empty" id="empty" hidden></div></main>
 
 <button class="fab" id="addBtn">＋</button>
 
@@ -181,6 +189,8 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
 
   var items = [], categories = [], curCat = '全部', curItem = null;
   var editing = null, formPhotos = [];
+  var closedCats = {};
+  try{ closedCats = JSON.parse(localStorage.getItem('costco_closed_cats')) || {}; }catch(e){}
 
   // Cloudinary 網址自動加上縮圖參數；其他網址原樣使用
   function cdn(u, t){
@@ -263,7 +273,7 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
     var photoCount = items.reduce(function(n,i){ return n + i.photos.length; }, 0);
     $('sub').textContent = '共 ' + items.length + ' 項商品・' + photoCount + ' 張照片';
     $('countTxt').textContent = '顯示 ' + list.length + ' 項';
-    $('grid').innerHTML = list.map(function(i){
+    var card = function(i){
       var ph = i.photos[0];
       return '<div class="item" data-id="'+i.id+'"><button class="editbtn" data-edit="'+i.id+'" title="編輯">✎</button>'+
         '<div class="thumb">'+(ph ? '<img loading="lazy" src="'+esc(thumbUrl(ph))+'" alt="">' : '沒有照片')+
@@ -273,6 +283,17 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
           '<div class="meta">'+esc([i.code ? '#'+i.code : '', i.cat].filter(Boolean).join('・'))+'</div>'+
           (i.date ? '<div class="meta">更新 '+esc(i.date.replace(/-/g,'/'))+'</div>' : '')+
           '<div class="prices">'+priceHtml(i)+'</div></div></div>';
+    };
+    // 依分類分組（順序跟 Notion 分類選項一致，未分類放最後）
+    var order = allCats(), groups = {};
+    list.forEach(function(i){ var k = i.cat || '未分類'; (groups[k] = groups[k] || []).push(i); });
+    var keys = order.filter(function(c){ return groups[c]; });
+    Object.keys(groups).forEach(function(k){ if(keys.indexOf(k) < 0 && k !== '未分類') keys.push(k); });
+    if(groups['未分類']) keys.push('未分類');
+    $('grid').innerHTML = keys.map(function(k){
+      return '<section class="sec'+(closedCats[k] ? ' closed' : '')+'"><div class="sec-h" data-sec="'+esc(k)+'">'+
+        '<h3>'+esc(k)+'</h3><span class="n">'+groups[k].length+'</span><span class="ar">▼</span></div>'+
+        '<div class="grid">'+groups[k].map(card).join('')+'</div></section>';
     }).join('');
     $('empty').hidden = list.length > 0;
     $('empty').textContent = items.length ? '找不到符合的商品' : '還沒有商品，按右下角 ＋ 新增';
@@ -415,6 +436,14 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
   $('sort').addEventListener('change', render);
   $('chips').addEventListener('click', function(e){ var b = e.target.closest('.chip'); if(b){ curCat = b.getAttribute('data-c'); render(); } });
   $('grid').addEventListener('click', function(e){
+    var sh = e.target.closest('[data-sec]');
+    if(sh){
+      var k = sh.getAttribute('data-sec');
+      if(closedCats[k]) delete closedCats[k]; else closedCats[k] = 1;
+      sh.parentNode.classList.toggle('closed', !!closedCats[k]);
+      try{ localStorage.setItem('costco_closed_cats', JSON.stringify(closedCats)); }catch(err){}
+      return;
+    }
     var eb = e.target.closest('[data-edit]');
     if(eb){
       e.stopPropagation();
