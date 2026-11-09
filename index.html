@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#8a9a8b">
+<title>好市多商品照片</title>
+<style>
+:root{
+  --bg:#f3f0eb; --card:#fbfaf7; --ink:#3d3a36; --sub:#8b857d; --line:#e2ddd5;
+  --main:#8a9a8b; --main-d:#6f7f70; --rose:#c49a94; --rose-d:#a8807a;
+  --blue:#8e9fae; --sand:#d8c9b2; --shadow:0 2px 10px rgba(60,55,50,.07);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","PingFang TC","Noto Sans TC",sans-serif;font-size:15px}
+button,input,select{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:20;background:var(--bg);padding:calc(env(safe-area-inset-top) + 12px) 16px 8px}
+.top{display:flex;align-items:center;gap:10px}
+.top h1{font-size:19px;margin:0;flex:1;letter-spacing:.5px}
+.top h1 small{display:block;font-size:12px;color:var(--sub);font-weight:400;margin-top:2px}
+.iconbtn{border:0;background:var(--card);width:38px;height:38px;border-radius:12px;box-shadow:var(--shadow);font-size:17px}
+.search{margin-top:10px;display:flex;gap:8px}
+.search input{flex:1;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 12px;outline:none}
+.search input:focus{border-color:var(--main)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:10px 0 4px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 13px;font-size:13px;color:var(--sub)}
+.chip.on{background:var(--main);border-color:var(--main);color:#fff}
+.bar{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--sub);padding:2px 2px 0}
+.bar select{border:0;background:transparent;color:var(--sub);font-size:12px}
+main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.item{background:var(--card);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);cursor:pointer;display:flex;flex-direction:column}
+.thumb{position:relative;aspect-ratio:1/1;background:#ebe6de;display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:12px}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.cnt{position:absolute;right:6px;bottom:6px;background:rgba(40,38,35,.55);color:#fff;font-size:11px;border-radius:8px;padding:2px 6px}
+.salebadge{position:absolute;left:6px;top:6px;background:var(--rose);color:#fff;font-size:11px;border-radius:8px;padding:2px 7px}
+.info{padding:9px 10px 11px;display:flex;flex-direction:column;gap:3px;flex:1}
+.nm{font-size:14px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meta{font-size:11px;color:var(--sub)}
+.prices{margin-top:auto;display:flex;align-items:baseline;gap:6px;padding-top:4px}
+.p-now{font-weight:600;font-size:15px}
+.p-sale{font-weight:700;font-size:15px;color:var(--rose-d)}
+.p-old{font-size:12px;color:var(--sub);text-decoration:line-through}
+.empty{text-align:center;color:var(--sub);padding:60px 10px}
+.fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 18px);z-index:30;width:60px;height:60px;border-radius:20px;border:0;background:var(--main);color:#fff;font-size:30px;box-shadow:0 6px 18px rgba(80,95,80,.35)}
+/* sheet */
+.mask{position:fixed;inset:0;background:rgba(40,38,35,.4);z-index:40;display:none}
+.mask.show{display:block}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--bg);border-radius:20px 20px 0 0;max-height:94vh;overflow-y:auto;transform:translateY(105%);transition:transform .25s ease;padding-bottom:calc(env(safe-area-inset-bottom) + 16px)}
+.sheet.show{transform:translateY(0)}
+@media(min-width:700px){.sheet{left:50%;width:560px;margin-left:-280px}}
+.sh-head{position:sticky;top:0;background:var(--bg);display:flex;align-items:center;gap:8px;padding:14px 16px 10px;z-index:2}
+.sh-head h2{flex:1;font-size:17px;margin:0}
+.sh-body{padding:0 16px}
+.gallery{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:8px;border-radius:16px}
+.gallery img{flex:none;width:100%;aspect-ratio:1/1;object-fit:cover;scroll-snap-align:center;border-radius:16px;background:#ebe6de}
+.dots{text-align:center;font-size:12px;color:var(--sub);margin:6px 0 2px}
+.dl{background:var(--card);border-radius:16px;margin-top:12px;box-shadow:var(--shadow)}
+.row{display:flex;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row span:first-child{color:var(--sub);flex:none}
+.row span:last-child{text-align:right;word-break:break-all}
+.copy{color:var(--blue);text-decoration:underline dotted}
+.btns{display:flex;gap:10px;margin-top:16px}
+.btn{flex:1;border:0;border-radius:14px;padding:13px;font-weight:600;background:var(--main);color:#fff}
+.btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:transparent;color:var(--rose-d);border:1px solid var(--rose)}
+.btn:disabled{opacity:.5}
+/* form */
+.fld{margin-top:12px}
+.fld label{display:block;font-size:13px;color:var(--sub);margin-bottom:5px}
+.fld input,.fld select{width:100%;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:11px 12px;outline:none;font-size:16px}
+.fld input:focus{border-color:var(--main)}
+.two{display:flex;gap:10px}.two .fld{flex:1}
+.photos{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.ph{position:relative;aspect-ratio:1/1;border-radius:12px;overflow:hidden;background:#ebe6de}
+.ph img{width:100%;height:100%;object-fit:cover}
+.ph .x{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(40,38,35,.6);color:#fff;font-size:13px;line-height:22px;padding:0}
+.ph .mv{position:absolute;bottom:3px;left:3px;border:0;background:rgba(40,38,35,.6);color:#fff;font-size:10px;border-radius:7px;padding:2px 5px}
+.ph .first{position:absolute;bottom:3px;left:3px;background:var(--main);color:#fff;font-size:10px;border-radius:7px;padding:2px 5px}
+.addph{aspect-ratio:1/1;border:1.5px dashed var(--sand);border-radius:12px;background:transparent;color:var(--sub);font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.addph b{font-size:22px;font-weight:400}
+.hint{font-size:11px;color:var(--sub);margin-top:6px}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 14px);transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:12px;font-size:13px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.show{opacity:.92}
+.loading{position:fixed;inset:0;z-index:55;background:rgba(243,240,235,.7);display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--sub);font-size:13px}
+.loading.show{display:flex}
+.spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--main);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.viewer{position:fixed;inset:0;z-index:70;background:#111;display:none;align-items:center;justify-content:center}
+.viewer.show{display:flex}
+.viewer img{max-width:100%;max-height:100%;object-fit:contain}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="top">
+    <h1>好市多商品照片<small id="sub">載入中…</small></h1>
+    <button class="iconbtn" id="refreshBtn" title="重新整理">↻</button>
+  </div>
+  <div class="search">
+    <input id="q" type="search" placeholder="搜尋 名稱／商品編號／條碼" autocomplete="off">
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="bar">
+    <span id="countTxt"></span>
+    <select id="sort">
+      <option value="edited">最近更新</option>
+      <option value="name">名稱</option>
+      <option value="code">商品編號</option>
+      <option value="priceAsc">價錢 低→高</option>
+      <option value="priceDesc">價錢 高→低</option>
+      <option value="sale">特價優先</option>
+    </select>
+  </div>
+</header>
+
+<main><div class="grid" id="grid"></div><div class="empty" id="empty" hidden></div></main>
+
+<button class="fab" id="addBtn">＋</button>
+
+<div class="mask" id="mask"></div>
+
+<!-- 詳細 -->
+<div class="sheet" id="detail">
+  <div class="sh-head"><h2 id="dTitle"></h2><button class="iconbtn" data-close>✕</button></div>
+  <div class="sh-body">
+    <div class="gallery" id="dGallery"></div>
+    <div class="dots" id="dDots"></div>
+    <div class="dl" id="dList"></div>
+    <div class="btns">
+      <button class="btn danger" id="dDel">刪除</button>
+      <button class="btn" id="dEdit">編輯</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新增 / 編輯 -->
+<div class="sheet" id="form">
+  <div class="sh-head"><h2 id="fTitle">新增商品</h2><button class="iconbtn" data-close>✕</button></div>
+  <div class="sh-body">
+    <div class="fld">
+      <label>照片（第一張為封面）</label>
+      <div class="photos" id="fPhotos"></div>
+      <input type="file" id="fFile" accept="image/*" multiple hidden>
+      <div class="hint">照片會自動壓縮後上傳到 Cloudinary，網址用 , 分隔存進 Notion</div>
+    </div>
+    <div class="fld"><label>商品名稱 *</label><input id="fName" placeholder="例：カークランド ミックスナッツ"></div>
+    <div class="two">
+      <div class="fld"><label>商品編號</label><input id="fCode" inputmode="numeric" placeholder="例：12345"></div>
+      <div class="fld"><label>分類</label><input id="fCat" list="catList" placeholder="選擇或輸入"></div>
+    </div>
+    <datalist id="catList"></datalist>
+    <div class="fld"><label>條碼</label><input id="fBarcode" inputmode="numeric" placeholder="JAN 碼"></div>
+    <div class="two">
+      <div class="fld"><label>現場價錢（円）</label><input id="fPrice" type="number" inputmode="numeric" placeholder="0"></div>
+      <div class="fld"><label>現場特價（円）</label><input id="fSale" type="number" inputmode="numeric" placeholder="沒有就留空"></div>
+    </div>
+    <div class="btns">
+      <button class="btn ghost" data-close>取消</button>
+      <button class="btn" id="fSave">儲存</button>
+    </div>
+  </div>
+</div>
+
+<div class="viewer" id="viewer"><img id="vImg" alt=""></div>
+<div class="loading" id="loading"><div class="spin"></div><div id="loadTxt">處理中…</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  var CACHE_KEY = 'costco_photo_cache_v2';
+  var CACHE_TTL = 10 * 60 * 1000; // 10 分鐘
+  var MAX_SIDE = 1600, JPEG_Q = 0.82;
+
+  var items = [], categories = [], curCat = '全部', curItem = null;
+  var editing = null, formPhotos = [];
+
+  // Cloudinary 網址自動加上縮圖參數；其他網址原樣使用
+  function cdn(u, t){
+    if(!/res\.cloudinary\.com\/.+\/image\/upload\//.test(u)) return u;
+    return u.replace('/image/upload/', '/image/upload/' + t + '/');
+  }
+  function thumbUrl(u){ return cdn(u, 'c_fill,w_400,h_400,q_auto,f_auto'); }
+  function bigUrl(u){ return cdn(u, 'c_limit,w_1400,q_auto,f_auto'); }
+
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function yen(n){ return n == null ? '' : '¥' + Number(n).toLocaleString('ja-JP'); }
+  function toast(t){ var e=$('toast'); e.textContent=t; e.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(function(){e.classList.remove('show');},2200); }
+  function loading(on, t){ $('loadTxt').textContent = t || '處理中…'; $('loading').classList.toggle('show', !!on); }
+
+  function api(body){
+    return fetch('/api/notion', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
+      .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || ('錯誤 ' + r.status)); return j; }); });
+  }
+
+  // ===== 快取 =====
+  function readCache(){
+    try{ var c = JSON.parse(localStorage.getItem(CACHE_KEY)); if(c && Date.now() - c.t < CACHE_TTL) return c; }catch(e){}
+    return null;
+  }
+  function writeCache(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ t:Date.now(), items:items, categories:categories })); }catch(e){} }
+  function clearCache(){ try{ localStorage.removeItem(CACHE_KEY); }catch(e){} }
+
+  function load(force){
+    var c = !force && readCache();
+    if(c){ items = c.items; categories = c.categories; render(); return Promise.resolve(); }
+    $('sub').textContent = '從 Notion 讀取中…';
+    return Promise.all([ api({action:'list'}), api({action:'schema'}) ]).then(function(r){
+      items = r[0].items; categories = r[1].categories || [];
+      writeCache(); render();
+    }).catch(function(e){ $('sub').textContent = '讀取失敗'; toast(e.message); });
+  }
+
+  // ===== 列表 =====
+  function allCats(){
+    var set = categories.slice();
+    items.forEach(function(i){ if(i.cat && set.indexOf(i.cat) < 0) set.push(i.cat); });
+    return set;
+  }
+  function renderChips(){
+    var cats = ['全部'].concat(allCats());
+    if(items.some(function(i){ return i.sale != null; })) cats.splice(1,0,'特價中');
+    if(cats.indexOf(curCat) < 0) curCat = '全部';
+    $('chips').innerHTML = cats.map(function(c){ return '<button class="chip'+(c===curCat?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</button>'; }).join('');
+    $('catList').innerHTML = allCats().map(function(c){ return '<option value="'+esc(c)+'">'; }).join('');
+  }
+  function filtered(){
+    var q = $('q').value.trim().toLowerCase();
+    var list = items.filter(function(i){
+      if(curCat === '特價中'){ if(i.sale == null) return false; }
+      else if(curCat !== '全部' && i.cat !== curCat) return false;
+      if(!q) return true;
+      return (i.name + ' ' + i.code + ' ' + i.barcode + ' ' + i.cat).toLowerCase().indexOf(q) >= 0;
+    });
+    var s = $('sort').value;
+    var eff = function(i){ return i.sale != null ? i.sale : (i.price != null ? i.price : Infinity); };
+    list.sort(function(a,b){
+      if(s==='name') return a.name.localeCompare(b.name,'ja');
+      if(s==='code') return a.code.localeCompare(b.code,'ja',{numeric:true});
+      if(s==='priceAsc') return eff(a) - eff(b);
+      if(s==='priceDesc') return (eff(b)===Infinity?-1:eff(b)) - (eff(a)===Infinity?-1:eff(a));
+      if(s==='sale') return (b.sale!=null) - (a.sale!=null) || b.edited.localeCompare(a.edited);
+      return b.edited.localeCompare(a.edited);
+    });
+    return list;
+  }
+  function priceHtml(i){
+    if(i.sale != null) return '<span class="p-sale">'+yen(i.sale)+'</span>' + (i.price!=null ? '<span class="p-old">'+yen(i.price)+'</span>' : '');
+    if(i.price != null) return '<span class="p-now">'+yen(i.price)+'</span>';
+    return '<span class="meta">未填價錢</span>';
+  }
+  function render(){
+    renderChips();
+    var list = filtered();
+    var photoCount = items.reduce(function(n,i){ return n + i.photos.length; }, 0);
+    $('sub').textContent = '共 ' + items.length + ' 項商品・' + photoCount + ' 張照片';
+    $('countTxt').textContent = '顯示 ' + list.length + ' 項';
+    $('grid').innerHTML = list.map(function(i){
+      var ph = i.photos[0];
+      return '<div class="item" data-id="'+i.id+'">'+
+        '<div class="thumb">'+(ph ? '<img loading="lazy" src="'+esc(thumbUrl(ph))+'" alt="">' : '沒有照片')+
+          (i.sale!=null ? '<span class="salebadge">特價</span>' : '')+
+          (i.photos.length>1 ? '<span class="cnt">'+i.photos.length+' 張</span>' : '')+'</div>'+
+        '<div class="info"><div class="nm">'+esc(i.name || '（未命名）')+'</div>'+
+          '<div class="meta">'+esc([i.code ? '#'+i.code : '', i.cat].filter(Boolean).join('・'))+'</div>'+
+          '<div class="prices">'+priceHtml(i)+'</div></div></div>';
+    }).join('');
+    $('empty').hidden = list.length > 0;
+    $('empty').textContent = items.length ? '找不到符合的商品' : '還沒有商品，按右下角 ＋ 新增';
+  }
+
+  // ===== Sheet =====
+  function openSheet(id){ $('mask').classList.add('show'); $(id).classList.add('show'); $(id).scrollTop = 0; }
+  function closeSheets(){ $('mask').classList.remove('show'); $('detail').classList.remove('show'); $('form').classList.remove('show'); }
+
+  function showDetail(it){
+    curItem = it;
+    $('dTitle').textContent = it.name || '（未命名）';
+    $('dGallery').innerHTML = it.photos.length
+      ? it.photos.map(function(p){ return '<img src="'+esc(bigUrl(p))+'" data-full="'+esc(p)+'" alt="">'; }).join('')
+      : '<div class="thumb" style="width:100%;border-radius:16px">沒有照片</div>';
+    $('dDots').textContent = it.photos.length > 1 ? '左右滑動查看 ' + it.photos.length + ' 張照片' : '';
+    var rows = [
+      ['商品編號', it.code, true], ['分類', it.cat], ['條碼', it.barcode, true],
+      ['現場價錢', yen(it.price)], ['現場特價', it.sale!=null ? yen(it.sale) : '—']
+    ];
+    if(it.sale!=null && it.price!=null && it.price > it.sale) rows.push(['折扣', '−' + yen(it.price - it.sale)]);
+    $('dList').innerHTML = rows.map(function(r){
+      var v = r[1] || '—';
+      return '<div class="row"><span>'+r[0]+'</span><span'+(r[2] && r[1] ? ' class="copy" data-copy="'+esc(r[1])+'"' : '')+'>'+esc(v)+'</span></div>';
+    }).join('');
+    openSheet('detail');
+  }
+
+  // ===== 表單 =====
+  function openForm(it){
+    editing = it || null;
+    $('fTitle').textContent = it ? '編輯商品' : '新增商品';
+    $('fName').value = it ? it.name : '';
+    $('fCode').value = it ? it.code : '';
+    $('fCat').value = it ? it.cat : (curCat !== '全部' && curCat !== '特價中' ? curCat : '');
+    $('fBarcode').value = it ? it.barcode : '';
+    $('fPrice').value = it && it.price != null ? it.price : '';
+    $('fSale').value = it && it.sale != null ? it.sale : '';
+    formPhotos = it ? it.photos.map(function(u){ return { kind:'old', url:u, preview:thumbUrl(u) }; }) : [];
+    renderFormPhotos();
+    closeSheets(); openSheet('form');
+  }
+  function renderFormPhotos(){
+    $('fPhotos').innerHTML = formPhotos.map(function(p, idx){
+      return '<div class="ph"><img src="'+esc(p.preview)+'" alt="">'+
+        '<button class="x" data-del="'+idx+'">✕</button>'+
+        (idx===0 ? '<span class="first">封面</span>' : '<button class="mv" data-first="'+idx+'">設為封面</button>')+'</div>';
+    }).join('') + '<button class="addph" id="addPh"><b>＋</b>拍照／選圖</button>' +
+      '<button class="addph" id="addUrl"><b>🔗</b>貼上網址</button>';
+  }
+
+  function compress(file){
+    return new Promise(function(resolve, reject){
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function(){
+        var w = img.naturalWidth, h = img.naturalHeight, s = Math.min(1, MAX_SIDE / Math.max(w, h));
+        var c = document.createElement('canvas'); c.width = Math.round(w*s); c.height = Math.round(h*s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', JPEG_Q));
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('無法讀取照片：' + file.name)); };
+      img.src = url;
+    });
+  }
+
+  function addFiles(files){
+    var arr = Array.prototype.slice.call(files);
+    if(!arr.length) return;
+    loading(true, '壓縮照片中…');
+    var chain = Promise.resolve();
+    arr.forEach(function(f, n){
+      chain = chain.then(function(){ return compress(f); }).then(function(dataUrl){
+        formPhotos.push({ kind:'pending', preview:dataUrl });
+      });
+    });
+    chain.then(renderFormPhotos).catch(function(e){ toast(e.message); }).then(function(){ loading(false); $('fFile').value=''; });
+  }
+
+  function save(){
+    var data = {
+      name: $('fName').value.trim(), code: $('fCode').value.trim(), cat: $('fCat').value.trim(),
+      barcode: $('fBarcode').value.trim(), price: $('fPrice').value.trim(), sale: $('fSale').value.trim()
+    };
+    if(!data.name){ toast('請輸入商品名稱'); $('fName').focus(); return; }
+    var pending = formPhotos.filter(function(p){ return p.kind === 'pending'; });
+    var done = 0;
+    loading(true, pending.length ? '上傳照片 0/' + pending.length : '儲存中…');
+    var chain = Promise.resolve();
+    pending.forEach(function(p){
+      chain = chain.then(function(){
+        return api({ action:'upload', contentType:'image/jpeg', data:p.preview.split(',')[1] });
+      }).then(function(r){
+        p.kind = 'old'; p.url = r.url; done++;
+        $('loadTxt').textContent = '上傳照片 ' + done + '/' + pending.length;
+      });
+    });
+    chain.then(function(){
+      $('loadTxt').textContent = '寫入 Notion 中…';
+      data.photos = formPhotos.map(function(p){ return p.url; });
+      return api(editing ? { action:'update', pageId:editing.id, data:data } : { action:'create', data:data });
+    }).then(function(r){
+      if(editing){ items = items.map(function(i){ return i.id === r.item.id ? r.item : i; }); }
+      else items.unshift(r.item);
+      if(data.cat && categories.indexOf(data.cat) < 0) categories.push(data.cat);
+      writeCache(); render(); closeSheets();
+      toast(editing ? '已更新' : '已新增');
+    }).catch(function(e){ toast('儲存失敗：' + e.message); })
+      .then(function(){ loading(false); });
+  }
+
+  function del(){
+    if(!curItem || !confirm('確定刪除「' + (curItem.name || '此商品') + '」？\n（會移到 Notion 垃圾桶，可在 Notion 復原）')) return;
+    loading(true, '刪除中…');
+    api({ action:'archive', pageId:curItem.id }).then(function(){
+      items = items.filter(function(i){ return i.id !== curItem.id; });
+      writeCache(); render(); closeSheets(); toast('已刪除');
+    }).catch(function(e){ toast('刪除失敗：' + e.message); }).then(function(){ loading(false); });
+  }
+
+  // ===== 事件 =====
+  $('q').addEventListener('input', render);
+  $('sort').addEventListener('change', render);
+  $('chips').addEventListener('click', function(e){ var b = e.target.closest('.chip'); if(b){ curCat = b.getAttribute('data-c'); render(); } });
+  $('grid').addEventListener('click', function(e){
+    var el = e.target.closest('.item'); if(!el) return;
+    var it = items.filter(function(i){ return i.id === el.getAttribute('data-id'); })[0];
+    if(it) showDetail(it);
+  });
+  $('refreshBtn').addEventListener('click', function(){ clearCache(); load(true).then(function(){ toast('已更新'); }); });
+  $('addBtn').addEventListener('click', function(){ openForm(null); });
+  $('mask').addEventListener('click', closeSheets);
+  Array.prototype.forEach.call(document.querySelectorAll('[data-close]'), function(b){ b.addEventListener('click', closeSheets); });
+  $('dEdit').addEventListener('click', function(){ openForm(curItem); });
+  $('dDel').addEventListener('click', del);
+  $('dList').addEventListener('click', function(e){
+    var c = e.target.closest('[data-copy]'); if(!c) return;
+    var v = c.getAttribute('data-copy');
+    (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(function(){ toast('已複製 ' + v); }, function(){ toast(v); });
+  });
+  $('dGallery').addEventListener('click', function(e){
+    if(e.target.tagName === 'IMG'){ $('vImg').src = e.target.getAttribute('data-full') || e.target.src; $('viewer').classList.add('show'); }
+  });
+  $('viewer').addEventListener('click', function(){ $('viewer').classList.remove('show'); });
+  $('fPhotos').addEventListener('click', function(e){
+    if(e.target.closest('#addPh')){ $('fFile').click(); return; }
+    if(e.target.closest('#addUrl')){
+      var v = prompt('貼上照片網址（多個可用 , 分隔）');
+      if(v){ v.split(/[,，\n]/).map(function(x){ return x.trim(); }).filter(function(x){ return /^https?:\/\//.test(x); })
+        .forEach(function(u){ formPhotos.push({ kind:'old', url:u, preview:thumbUrl(u) }); }); renderFormPhotos(); }
+      return;
+    }
+    var d = e.target.getAttribute('data-del'), f = e.target.getAttribute('data-first');
+    if(d != null){ formPhotos.splice(+d, 1); renderFormPhotos(); }
+    if(f != null){ formPhotos.unshift(formPhotos.splice(+f, 1)[0]); renderFormPhotos(); }
+  });
+  $('fFile').addEventListener('change', function(){ addFiles(this.files); });
+  $('fSave').addEventListener('click', save);
+
+  load(false);
+})();
+</script>
+</body>
+</html>
