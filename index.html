@@ -395,8 +395,7 @@ body:not(.admin-on) .admin-only{display:none!important}
           (i.sale!=null ? '<span class="salebadge">特價'+(i.saleEnd ? ' ~'+md(i.saleEnd) : '')+'</span>' : '')+
           (i.photos.length>1 ? '<span class="cnt">'+i.photos.length+' 張</span>' : '')+'</div>'+
         '<div class="info"><div class="nm">'+esc(i.name || '（未命名）')+'</div>'+
-          '<div class="meta">'+esc([i.code ? '#'+i.code : '', i.cat].filter(Boolean).join('・'))+'</div>'+
-          (i.date ? '<div class="meta">更新 '+esc(i.date.replace(/-/g,'/'))+'</div>' : '')+
+          (i.code ? '<div class="meta">#'+esc(i.code)+'</div>' : '')+
           '<div class="prices">'+priceHtml(i)+'</div></div></div>';
     };
     // 依分類分組（順序跟 Notion 分類選項一致，未分類放最後）
