@@ -230,15 +230,28 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
   function writeCache(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ t:Date.now(), items:items, categories:categories })); }catch(e){} }
   function clearCache(){ try{ localStorage.removeItem(CACHE_KEY); }catch(e){} }
 
+  // 先用快取立即顯示，同時一定會從 Notion 抓最新資料再更新畫面
+  var lastFetch = 0, fetching = null;
+  function fetchFresh(silent){
+    if(fetching) return fetching;
+    if(!silent) $('sub').textContent = '從 Notion 讀取中…';
+    fetching = Promise.all([ api({action:'list'}), api({action:'schema'}) ]).then(function(r){
+      items = r[0].items; categories = r[1].categories || [];
+      lastFetch = Date.now();
+      writeCache(); render();
+    }).catch(function(e){ if(!silent) $('sub').textContent = '讀取失敗'; toast('讀取失敗：' + e.message); })
+      .then(function(){ fetching = null; });
+    return fetching;
+  }
   function load(force){
     var c = !force && readCache();
-    if(c){ items = c.items; categories = c.categories; render(); return Promise.resolve(); }
-    $('sub').textContent = '從 Notion 讀取中…';
-    return Promise.all([ api({action:'list'}), api({action:'schema'}) ]).then(function(r){
-      items = r[0].items; categories = r[1].categories || [];
-      writeCache(); render();
-    }).catch(function(e){ $('sub').textContent = '讀取失敗'; toast(e.message); });
+    if(c){ items = c.items; categories = c.categories; render(); return fetchFresh(true); }
+    return fetchFresh(false);
   }
+  // 切回這個分頁／App 時，超過 30 秒就自動更新
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'visible' && Date.now() - lastFetch > 30000) fetchFresh(true);
+  });
 
   // ===== 列表 =====
   function allCats(){
