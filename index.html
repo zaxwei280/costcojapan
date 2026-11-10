@@ -82,6 +82,7 @@ body:not(.admin-on) .admin-only{display:none!important}
 .pw-mask{-webkit-text-security:disc;text-security:disc}
 .pweye{flex:none;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:0 14px;color:var(--sub);font-size:13px}
 .cardbtn{width:100%;margin-top:12px}
+.cardbtn[hidden]{display:none}
 .cardview{position:fixed;inset:0;z-index:72;background:rgba(30,28,26,.92);display:none;flex-direction:column;padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px)}
 .cardview.show{display:flex}
 .cv-img{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
@@ -89,7 +90,7 @@ body:not(.admin-on) .admin-only{display:none!important}
 .cv-tip{text-align:center;color:#bbb;font-size:12px;margin:10px 0 4px}
 .cv-btns{display:flex;gap:10px;margin-top:8px;max-width:520px;width:100%;align-self:center}
 .cv-btns .btn[hidden]{display:none}
-.dtabs{display:flex;background:#ebe6de;border-radius:12px;padding:3px;margin-top:12px;position:sticky;top:62px;z-index:1}
+.dtabs{display:flex;background:#ebe6de;border-radius:12px;padding:3px;margin-top:12px}
 .dtabs button{flex:1;border:0;background:transparent;font-size:13px;padding:8px 4px;border-radius:10px;color:var(--sub)}
 .dtabs button.on{background:var(--card);color:var(--ink);font-weight:700;box-shadow:var(--shadow)}
 .dpane{background:var(--card);border-radius:16px;margin-top:10px;box-shadow:var(--shadow);padding:14px 15px;line-height:1.8;font-size:15px;white-space:pre-line;word-break:break-word}
@@ -116,6 +117,10 @@ body:not(.admin-on) .admin-only{display:none!important}
 @media(min-width:700px){.sheet{left:50%;width:560px;margin-left:-280px}}
 .sh-head{position:sticky;top:0;background:var(--bg);display:flex;align-items:center;gap:8px;padding:14px 16px 10px;z-index:2}
 .sh-head h2{flex:1;font-size:17px;margin:0}
+.d-top{position:sticky;top:0;z-index:3;background:var(--bg);padding-bottom:10px;box-shadow:0 6px 10px -8px rgba(60,55,50,.18)}
+.d-top .sh-head{position:static}
+.d-top .sh-head h2{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.d-top .dnav{margin:0 16px}
 .sh-body{padding:0 16px}
 .gallery{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:8px;border-radius:16px}
 .gallery img{flex:none;width:100%;aspect-ratio:1/1;object-fit:cover;scroll-snap-align:center;border-radius:16px;background:#ebe6de}
@@ -191,11 +196,13 @@ body:not(.admin-on) .admin-only{display:none!important}
 
 <!-- 詳細 -->
 <div class="sheet" id="detail">
-  <div class="sh-head"><h2 id="dTitle"></h2><button class="iconbtn" data-close>✕</button></div>
-  <div class="sh-body">
+  <div class="d-top">
+    <div class="sh-head"><h2 id="dTitle"></h2><button class="iconbtn" data-close>✕</button></div>
     <div class="dnav">
       <button id="dPrev">‹ 上一個</button><span id="dPos"></span><button id="dNext">下一個 ›</button>
     </div>
+  </div>
+  <div class="sh-body">
     <div class="gallery" id="dGallery"></div>
     <div class="dots" id="dDots"></div>
     <div class="dtags" id="dTags"></div>
@@ -203,6 +210,7 @@ body:not(.admin-on) .admin-only{display:none!important}
     <div class="dl" id="dList"></div>
     <div class="dpane" id="dPane" hidden></div>
     <button class="btn ghost cardbtn" id="dCard">🪪 匯出商品小卡</button>
+    <button class="btn ghost cardbtn admin-only" id="dDlAll">⬇ 下載全部照片</button>
     <div class="btns admin-only">
       <button class="btn danger" id="dDel">刪除</button>
       <button class="btn" id="dEdit">編輯</button>
@@ -453,9 +461,13 @@ body:not(.admin-on) .admin-only{display:none!important}
     $('dNext').disabled = idx < 0 || idx >= visibleOrder.length - 1;
     $('dPos').textContent = idx >= 0 ? (idx + 1) + ' / ' + visibleOrder.length : '';
     $('dGallery').scrollLeft = 0;
+    $('detail').scrollTop = 0;
     $('dGallery').innerHTML = it.photos.length
       ? it.photos.map(function(p){ return '<img src="'+esc(bigUrl(p))+'" data-full="'+esc(p)+'" alt="">'; }).join('')
       : '<div class="thumb" style="width:100%;border-radius:16px">沒有照片</div>';
+    dlReady = null;
+    $('dDlAll').hidden = !it.photos.length;
+    $('dDlAll').textContent = '⬇ 下載全部照片（' + it.photos.length + ' 張）';
     $('dDots').textContent = it.photos.length > 1 ? '左右滑動查看 ' + it.photos.length + ' 張照片' : '';
     var rows = [
       ['商品編號', it.code, true], ['分類', it.cat], ['條碼', it.barcode, true]
@@ -980,6 +992,90 @@ body:not(.admin-on) .admin-only{display:none!important}
   }
 
   $('dCard').addEventListener('click', exportCard);
+
+  // ===== 一鍵下載全部照片（管理者） =====
+  var dlReady = null; // { id, files }
+  function safeName(t){ return String(t || '').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 50); }
+  function extOf(type, url){
+    if(/png/.test(type)) return 'png';
+    if(/webp/.test(type)) return 'webp';
+    if(/heic|heif/.test(type)) return 'heic';
+    var m = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.exec(url || '');
+    return m ? m[1].toLowerCase().replace('jpeg', 'jpg') : 'jpg';
+  }
+  function fetchPhotos(it){
+    var base = (it.code ? it.code + '_' : '') + safeName(it.name || 'item');
+    var files = [], fail = 0, done = 0;
+    var chain = Promise.resolve();
+    it.photos.forEach(function(u, n){
+      chain = chain.then(function(){
+        return fetch(u, { mode:'cors' }).then(function(r){
+          if(!r.ok) throw new Error(r.status);
+          return r.blob();
+        }).then(function(b){
+          var type = b.type || 'image/jpeg';
+          files.push(new File([b], base + '_' + (n + 1) + '.' + extOf(type, u), { type:type }));
+        }).catch(function(){ fail++; })
+          .then(function(){ done++; $('loadTxt').textContent = '下載照片 ' + done + '/' + it.photos.length; });
+      });
+    });
+    return chain.then(function(){ return { files:files, fail:fail, base:base }; });
+  }
+  function loadJSZip(){
+    if(window.JSZip) return Promise.resolve(window.JSZip);
+    return new Promise(function(resolve, reject){
+      var sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+      sc.onload = function(){ resolve(window.JSZip); };
+      sc.onerror = function(){ reject(new Error('無法載入壓縮工具')); };
+      document.head.appendChild(sc);
+    });
+  }
+  function saveBlob(blob, name){
+    var u = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(u); }, 4000);
+  }
+  function canShareFiles(files){
+    try{ return !!(navigator.canShare && navigator.share && navigator.canShare({ files:files })); }catch(e){ return false; }
+  }
+  var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  function shareFiles(files){
+    return navigator.share({ files:files }).then(function(){ dlReady = null; resetDlBtn(); }, function(e){
+      if(e && e.name === 'AbortError') return; // 使用者取消
+      // iPhone 下載時間太久會失去「按鈕觸發」資格 → 請使用者再按一次
+      $('dDlAll').textContent = '📥 已準備好，點這裡存到相簿（' + files.length + ' 張）';
+      toast('照片已準備好，請再按一次按鈕');
+    });
+  }
+  function resetDlBtn(){
+    if(curItem) $('dDlAll').textContent = '⬇ 下載全部照片（' + curItem.photos.length + ' 張）';
+  }
+  function downloadAll(){
+    var it = curItem;
+    if(!it || !it.photos.length) return;
+    if(dlReady && dlReady.id === it.id && canShareFiles(dlReady.files)){ shareFiles(dlReady.files); return; }
+    loading(true, '下載照片 0/' + it.photos.length);
+    fetchPhotos(it).then(function(r){
+      if(!r.files.length) throw new Error('照片都無法下載');
+      if(isMobile && canShareFiles(r.files)){
+        dlReady = { id:it.id, files:r.files };
+        loading(false);
+        return shareFiles(r.files);
+      }
+      if(r.fail) toast(r.fail + ' 張照片無法下載，已略過');
+      if(r.files.length === 1){ saveBlob(r.files[0], r.files[0].name); return; }
+      $('loadTxt').textContent = '壓縮中…';
+      return loadJSZip().then(function(JSZip){
+        var zip = new JSZip();
+        r.files.forEach(function(f){ zip.file(f.name, f); });
+        return zip.generateAsync({ type:'blob' });
+      }).then(function(blob){ saveBlob(blob, r.base + '_' + r.files.length + '張.zip'); toast('已下載 ' + r.files.length + ' 張照片' + (r.fail ? '（' + r.fail + ' 張失敗已略過）' : '')); });
+    }).catch(function(e){ toast('下載失敗：' + e.message); })
+      .then(function(){ loading(false); });
+  }
+  $('dDlAll').addEventListener('click', downloadAll);
   $('cardShare').addEventListener('click', function(){
     if(cardFile) navigator.share({ files:[cardFile] }).catch(function(){});
   });
