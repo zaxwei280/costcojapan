@@ -23,7 +23,10 @@ const P = {
   sale: '現場特價',   // Number
   photos: '照片',     // Text（多張網址用 , 分隔）
   date: '更新日期',   // Date
-  period: '特價期間'  // Date（開始～結束）
+  period: '特價期間', // Date（開始～結束）
+  desc: '詳細說明',   // Text（選用）
+  weight: '重量',     // Number（選用，單位 g）
+  tags: '重點'        // Multi-select（選用）
 };
 
 async function notion(path, method = 'GET', body) {
@@ -73,6 +76,9 @@ function simplify(page) {
     date: (p[P.date] && p[P.date].date && p[P.date].date.start) || '',
     saleStart: (p[P.period] && p[P.period].date && p[P.period].date.start || '').slice(0, 10),
     saleEnd: (p[P.period] && p[P.period].date && p[P.period].date.end || '').slice(0, 10),
+    desc: txt(p[P.desc] && p[P.desc].rich_text),
+    weight: p[P.weight] && p[P.weight].number != null ? p[P.weight].number : null,
+    tags: ((p[P.tags] && p[P.tags].multi_select) || []).map(o => o.name),
     edited: page.last_edited_time
   };
 }
@@ -95,6 +101,13 @@ function buildProps(d) {
   if ('saleStart' in d || 'saleEnd' in d) {
     const s = String(d.saleStart || '').slice(0, 10), e = String(d.saleEnd || '').slice(0, 10);
     props[P.period] = { date: s ? { start: s, end: e && e >= s ? e : null } : null };
+  }
+  if ('desc' in d) props[P.desc] = { rich_text: rich(d.desc) };
+  if ('weight' in d) props[P.weight] = { number: numOrNull(d.weight) };
+  if ('tags' in d) {
+    const list = (Array.isArray(d.tags) ? d.tags : String(d.tags || '').split(/[,，、]/))
+      .map(t => String(t).trim().replace(/,/g, '，').slice(0, 100)).filter(Boolean);
+    props[P.tags] = { multi_select: Array.from(new Set(list)).map(name => ({ name })) };
   }
   if ('date' in d) props[P.date] = { date: d.date ? { start: String(d.date).slice(0, 10) } : null };
   if ('photos' in d) {
@@ -179,7 +192,11 @@ module.exports = async (req, res) => {
       case 'schema': {
         const db = await notion('/databases/' + DB);
         const sel = db.properties[P.cat] && db.properties[P.cat].select;
-        return res.json({ categories: sel ? sel.options.map(o => o.name) : [] });
+        const tg = db.properties[P.tags] && db.properties[P.tags].multi_select;
+        // 回傳選用欄位是否存在，前端只送出 Notion 有建立的欄位
+        const has = {};
+        ['desc', 'tags', 'weight'].forEach(k => { has[k] = !!db.properties[P[k]]; });
+        return res.json({ categories: sel ? sel.options.map(o => o.name) : [], tagOptions: tg ? tg.options.map(o => o.name) : [], has });
       }
 
       case 'list': {
