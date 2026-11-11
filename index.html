@@ -267,7 +267,6 @@ body:not(.admin-on) .admin-only{display:none!important}
   <div class="cv-tip">iPhone 也可以長按圖片 →「加入照片」</div>
   <div class="cv-btns">
     <button class="btn ghost" id="cardClose">關閉</button>
-    <button class="btn ghost" id="cardSave">下載</button>
     <button class="btn" id="cardShare">分享／存相簿</button>
   </div>
 </div>
@@ -1023,7 +1022,8 @@ body:not(.admin-on) .admin-only{display:none!important}
       if(cardUrl) URL.revokeObjectURL(cardUrl);
       cardUrl = URL.createObjectURL(blob);
       $('cardImg').src = cardUrl;
-      $('cardShare').hidden = !(navigator.canShare && navigator.canShare({ files:[cardFile] }));
+      cardCanShare = !!(navigator.canShare && navigator.share && navigator.canShare({ files:[cardFile] }));
+      $('cardShare').textContent = cardCanShare ? '分享／存相簿' : '下載小卡';
       $('cardView').classList.add('show');
     }).catch(function(e){ toast('匯出失敗：' + e.message); })
       .then(function(){ loading(false); });
@@ -1114,19 +1114,21 @@ body:not(.admin-on) .admin-only{display:none!important}
       .then(function(){ loading(false); });
   }
   $('dDlAll').addEventListener('click', downloadAll);
+  var cardCanShare = false;
   $('cardShare').addEventListener('click', function(){
     if(!cardFile || !curItem) return;
+    if(!cardCanShare){
+      // 不支援分享（電腦）→ 下載小卡並複製連結
+      var a = document.createElement('a'); a.href = cardUrl; a.download = cardFile.name;
+      document.body.appendChild(a); a.click(); a.remove();
+      copyText(itemLink(curItem)).then(function(){ toast('已下載小卡，商品連結也已複製'); }, function(){});
+      return;
+    }
     var text = shareText(curItem);
     // 先複製連結，Instagram 等不帶文字的平台可以直接貼上
     copyText(itemLink(curItem)).catch(function(){});
     navigator.share({ files:[cardFile], title: curItem.name || '', text: text })
       .then(function(){ toast('商品連結也已複製，需要時可直接貼上'); }, function(){});
-  });
-  $('cardSave').addEventListener('click', function(){
-    if(!cardFile) return;
-    var a = document.createElement('a'); a.href = cardUrl; a.download = cardFile.name;
-    document.body.appendChild(a); a.click(); a.remove();
-    if(curItem) copyText(itemLink(curItem)).then(function(){ toast('已下載小卡，商品連結也已複製'); }, function(){});
   });
   $('cardClose').addEventListener('click', function(){ $('cardView').classList.remove('show'); });
 
