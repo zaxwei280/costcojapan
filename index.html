@@ -536,10 +536,10 @@ body:not(.admin-on) .admin-only{display:none!important}
     $('fCat').value = val || '';
     $('fCat').setAttribute('data-prev', $('fCat').value);
   }
-  // 公斤，四捨五入到小數點後 1 位
+  // 公斤，四捨五入到小數點後 2 位
   function kg(w){
-    var n = Math.round((Number(w) + Number.EPSILON) * 10) / 10;
-    return n.toLocaleString('ja-JP', { minimumFractionDigits:1, maximumFractionDigits:1 }) + ' kg';
+    var n = Math.round((Number(w) + Number.EPSILON) * 100) / 100;
+    return n.toLocaleString('ja-JP', { minimumFractionDigits:2, maximumFractionDigits:2 }) + ' kg';
   }
   function splitTags(v){
     var out = [];
