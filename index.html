@@ -447,11 +447,48 @@ body:not(.admin-on) .admin-only{display:none!important}
     }).join('');
     $('empty').hidden = list.length > 0;
     $('empty').textContent = items.length ? '找不到符合的商品' : '還沒有商品，按右下角 ＋ 新增';
+    openDeepLink();
+  }
+
+  // ===== 商品連結（?p=商品編號）=====
+  var deepKey = null;
+  try{ deepKey = new URLSearchParams(location.search).get('p'); }catch(e){}
+  function normId(x){ return String(x || '').replace(/-/g, '').toLowerCase(); }
+  function findByKey(k){
+    k = String(k || '').trim(); if(!k) return null;
+    return items.filter(function(i){ return i.code && i.code.trim() === k; })[0] ||
+           items.filter(function(i){ return normId(i.id) === normId(k); })[0] || null;
+  }
+  function openDeepLink(){
+    if(!deepKey) return;
+    var it = findByKey(deepKey);
+    if(it){ deepKey = null; showDetail(it); }
+  }
+  function itemLink(it){
+    var key = it.code && it.code.trim() ? it.code.trim() : normId(it.id);
+    return location.origin + location.pathname + '?p=' + encodeURIComponent(key);
+  }
+  function setUrl(it){
+    try{ history.replaceState(null, '', it ? itemLink(it) : location.pathname); }catch(e){}
+  }
+  function copyText(t){
+    if(navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t);
+    return new Promise(function(resolve, reject){
+      var ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy') ? resolve() : reject(); }catch(e){ reject(e); }
+      ta.remove();
+    });
+  }
+  function shareText(it){
+    var price = it.sale != null ? '特價 ' + yen(it.sale) + (it.saleEnd ? '（至 ' + it.saleEnd.replace(/-/g,'/') + '）' : '')
+              : it.price != null ? yen(it.price) : '';
+    return [it.name || '', price, itemLink(it)].filter(Boolean).join('\n');
   }
 
   // ===== Sheet =====
   function openSheet(id){ $('mask').classList.add('show'); $(id).classList.add('show'); $(id).scrollTop = 0; }
-  function closeSheets(){ $('mask').classList.remove('show'); $('detail').classList.remove('show'); $('form').classList.remove('show'); $('settings').classList.remove('show'); }
+  function closeSheets(){ if($('detail').classList.contains('show')) setUrl(null); $('mask').classList.remove('show'); $('detail').classList.remove('show'); $('form').classList.remove('show'); $('settings').classList.remove('show'); }
 
   function showDetail(it){
     curItem = it;
@@ -489,6 +526,7 @@ body:not(.admin-on) .admin-only{display:none!important}
     $('dTags').innerHTML = (it.tags || []).map(function(t){ return '<span class="dtag">'+esc(t)+'</span>'; }).join('');
     renderTabs(it);
     openSheet('detail');
+    setUrl(it);
   }
 
   var TABS = [['info','商品資料'], ['desc','商品說明']];
@@ -1077,12 +1115,18 @@ body:not(.admin-on) .admin-only{display:none!important}
   }
   $('dDlAll').addEventListener('click', downloadAll);
   $('cardShare').addEventListener('click', function(){
-    if(cardFile) navigator.share({ files:[cardFile] }).catch(function(){});
+    if(!cardFile || !curItem) return;
+    var text = shareText(curItem);
+    // 先複製連結，Instagram 等不帶文字的平台可以直接貼上
+    copyText(itemLink(curItem)).catch(function(){});
+    navigator.share({ files:[cardFile], title: curItem.name || '', text: text })
+      .then(function(){ toast('商品連結也已複製，需要時可直接貼上'); }, function(){});
   });
   $('cardSave').addEventListener('click', function(){
     if(!cardFile) return;
     var a = document.createElement('a'); a.href = cardUrl; a.download = cardFile.name;
     document.body.appendChild(a); a.click(); a.remove();
+    if(curItem) copyText(itemLink(curItem)).then(function(){ toast('已下載小卡，商品連結也已複製'); }, function(){});
   });
   $('cardClose').addEventListener('click', function(){ $('cardView').classList.remove('show'); });
 
