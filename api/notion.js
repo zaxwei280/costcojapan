@@ -25,7 +25,8 @@ const P = {
   date: '更新日期',   // Date
   period: '特價期間', // Date（開始～結束）
   desc: '詳細說明',   // Text（選用）
-  weight: '重量',     // Number（選用，單位 g）
+  weight: '重量',     // Number（選用，單位 kg）
+  isNew: '新品',      // Checkbox（選用）
   tags: '重點'        // Multi-select（選用）
 };
 
@@ -78,6 +79,7 @@ function simplify(page) {
     saleEnd: (p[P.period] && p[P.period].date && p[P.period].date.end || '').slice(0, 10),
     desc: txt(p[P.desc] && p[P.desc].rich_text),
     weight: p[P.weight] && p[P.weight].number != null ? p[P.weight].number : null,
+    isNew: !!(p[P.isNew] && p[P.isNew].checkbox),
     tags: ((p[P.tags] && p[P.tags].multi_select) || []).map(o => o.name),
     edited: page.last_edited_time
   };
@@ -104,6 +106,7 @@ function buildProps(d) {
   }
   if ('desc' in d) props[P.desc] = { rich_text: rich(d.desc) };
   if ('weight' in d) props[P.weight] = { number: numOrNull(d.weight) };
+  if ('isNew' in d) props[P.isNew] = { checkbox: !!d.isNew };
   if ('tags' in d) {
     const list = (Array.isArray(d.tags) ? d.tags : String(d.tags || '').split(/[,，、]/))
       .map(t => String(t).trim().replace(/,/g, '，').slice(0, 100)).filter(Boolean);
@@ -195,7 +198,7 @@ module.exports = async (req, res) => {
         const tg = db.properties[P.tags] && db.properties[P.tags].multi_select;
         // 回傳選用欄位是否存在，前端只送出 Notion 有建立的欄位
         const has = {};
-        ['desc', 'tags', 'weight'].forEach(k => { has[k] = !!db.properties[P[k]]; });
+        ['desc', 'tags', 'weight', 'isNew'].forEach(k => { has[k] = !!db.properties[P[k]]; });
         return res.json({ categories: sel ? sel.options.map(o => o.name) : [], tagOptions: tg ? tg.options.map(o => o.name) : [], has });
       }
 
