@@ -399,7 +399,10 @@ body:not(.admin-on) .admin-only{display:none!important}
     });
     var s = $('sort').value;
     var eff = function(i){ return i.sale != null ? i.sale : (i.price != null ? i.price : Infinity); };
+    // 特價＋新品 > 特價 > 新品 > 一般，同一級再依選擇的排序
+    var prio = function(i){ return (i.sale != null ? 2 : 0) + (i.isNew ? 1 : 0); };
     list.sort(function(a,b){
+      var pd = prio(b) - prio(a); if(pd) return pd;
       if(s==='name') return a.name.localeCompare(b.name,'ja');
       if(s==='code') return a.code.localeCompare(b.code,'ja',{numeric:true});
       if(s==='priceAsc') return eff(a) - eff(b);
