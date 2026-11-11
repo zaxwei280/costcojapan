@@ -37,7 +37,11 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
 .thumb{position:relative;aspect-ratio:1/1;background:#ebe6de;display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:12px}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .cnt{position:absolute;right:6px;bottom:6px;background:rgba(40,38,35,.55);color:#fff;font-size:11px;border-radius:8px;padding:2px 6px}
-.salebadge{position:absolute;left:6px;top:6px;background:var(--rose);color:#fff;font-size:11px;border-radius:8px;padding:2px 7px}
+.badges{position:absolute;left:6px;top:6px;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.salebadge{background:var(--rose);color:#fff;font-size:11px;border-radius:8px;padding:2px 7px}
+.newbadge{background:var(--blue);color:#fff;font-size:11px;font-weight:700;border-radius:8px;padding:2px 7px;letter-spacing:1px}
+.switch.inform{box-shadow:none;border:1px solid var(--line);margin-top:12px;padding:11px 14px}
+.switch.inform[hidden]{display:none}
 .info{padding:9px 10px 11px;display:flex;flex-direction:column;gap:3px;flex:1}
 .nm{font-size:14px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .meta{font-size:11px;color:var(--sub)}
@@ -233,6 +237,10 @@ body:not(.admin-on) .admin-only{display:none!important}
       <div class="fld"><label>商品編號</label><input id="fCode" inputmode="numeric" placeholder="例：12345"><div class="codewarn" id="codeWarn" hidden></div></div>
       <div class="fld"><label>分類</label><select id="fCat"></select></div>
     </div>
+    <label class="switch inform optfld" id="fNewBox">
+      <div><b>新品</b><small>開啟後首頁縮圖會顯示「新品」標籤</small></div>
+      <span class="tg"><input type="checkbox" id="fNew"><span></span></span>
+    </label>
     <div class="newcat" id="newCatBox" hidden>
       <input id="newCatInput" placeholder="輸入新分類名稱" autocomplete="off">
       <button type="button" class="nc-ok" id="newCatOk">加入</button>
@@ -376,6 +384,7 @@ body:not(.admin-on) .admin-only{display:none!important}
   function renderChips(){
     var cats = ['全部'].concat(allCats());
     if(items.some(function(i){ return i.sale != null; })) cats.splice(1,0,'特價中');
+    if(items.some(function(i){ return i.isNew; })) cats.splice(1,0,'新品');
     if(cats.indexOf(curCat) < 0) curCat = '全部';
     $('chips').innerHTML = cats.map(function(c){ return '<button class="chip'+(c===curCat?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</button>'; }).join('');
   }
@@ -383,6 +392,7 @@ body:not(.admin-on) .admin-only{display:none!important}
     var q = $('q').value.trim().toLowerCase();
     var list = items.filter(function(i){
       if(curCat === '特價中'){ if(i.sale == null) return false; }
+      else if(curCat === '新品'){ if(!i.isNew) return false; }
       else if(curCat !== '全部' && i.cat !== curCat) return false;
       if(!q) return true;
       return (i.name + ' ' + i.code + ' ' + i.barcode + ' ' + i.cat).toLowerCase().indexOf(q) >= 0;
@@ -425,7 +435,9 @@ body:not(.admin-on) .admin-only{display:none!important}
       var ph = i.photos[0];
       return '<div class="item" data-id="'+i.id+'"><button class="editbtn admin-only" data-edit="'+i.id+'" title="編輯">✎</button>'+
         '<div class="thumb">'+(ph ? '<img loading="lazy" src="'+esc(thumbUrl(ph))+'" alt="">' : '沒有照片')+
-          (i.sale!=null ? '<span class="salebadge">特價'+(i.saleEnd ? ' ~'+md(i.saleEnd) : '')+'</span>' : '')+
+          ((i.isNew || i.sale!=null) ? '<div class="badges">'+
+            (i.isNew ? '<span class="newbadge">新品</span>' : '')+
+            (i.sale!=null ? '<span class="salebadge">特價'+(i.saleEnd ? ' ~'+md(i.saleEnd) : '')+'</span>' : '')+'</div>' : '')+
           (i.photos.length>1 ? '<span class="cnt">'+i.photos.length+' 張</span>' : '')+'</div>'+
         '<div class="info"><div class="nm">'+esc(i.name || '（未命名）')+'</div>'+
           (i.code ? '<div class="meta">#'+esc(i.code)+'</div>' : '')+
@@ -545,7 +557,7 @@ body:not(.admin-on) .admin-only{display:none!important}
     $('fTitle').textContent = it ? '編輯商品' : '新增商品';
     $('fName').value = it ? it.name : '';
     $('fCode').value = it ? it.code : '';
-    fillCatSelect(it ? it.cat : (curCat !== '全部' && curCat !== '特價中' ? curCat : ''));
+    fillCatSelect(it ? it.cat : (curCat !== '全部' && curCat !== '特價中' && curCat !== '新品' ? curCat : ''));
     $('fBarcode').value = it ? it.barcode : '';
     $('fPrice').value = it && it.price != null ? it.price : '';
     $('fSale').value = it && it.saleRaw != null ? it.saleRaw : '';
@@ -554,6 +566,8 @@ body:not(.admin-on) .admin-only{display:none!important}
     $('fDate').value = today();
     $('fTagsBox').hidden = !has.tags; $('fDescBox').hidden = !has.desc;
     $('fWeightBox').hidden = !has.weight;
+    $('fNewBox').hidden = !has.isNew;
+    $('fNew').checked = !!(it && it.isNew);
     $('fWeight').value = it && it.weight != null ? it.weight : '';
     $('fTags').value = it && it.tags ? it.tags.join(', ') : '';
     $('fDesc').value = it ? (it.desc || '') : '';
@@ -646,6 +660,7 @@ body:not(.admin-on) .admin-only{display:none!important}
     if(has.tags) data.tags = splitTags($('fTags').value);
     if(has.desc) data.desc = $('fDesc').value.trim();
     if(has.weight) data.weight = $('fWeight').value.trim();
+    if(has.isNew) data.isNew = $('fNew').checked;
     if(data.saleEnd && !data.saleStart){ data.saleStart = today(); $('fSaleStart').value = data.saleStart; }
     if(data.saleStart && data.saleEnd && data.saleEnd < data.saleStart){ toast('特價結束日不能早於開始日'); $('fSaleEnd').focus(); return; }
     var localDup = localDupItem(data.code);
@@ -903,13 +918,16 @@ body:not(.admin-on) .admin-only{display:none!important}
     }
     ctx.restore();
 
-    // 特價標籤
-    if(it.sale != null){
+    // 新品／特價標籤
+    var bx0 = PAD + 24;
+    [[it.isNew, '新品', '#8e9fae'], [it.sale != null, '特價', '#c49a94']].forEach(function(t){
+      if(!t[0]) return;
       ctx.font = '700 38px ' + CARD_FONT;
-      var bw = ctx.measureText('特價').width + 48;
-      rrect(ctx, PAD+24, PAD+24, bw, 64, 18); ctx.fillStyle = '#c49a94'; ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText('特價', PAD+48, PAD+57); ctx.textBaseline = 'alphabetic';
-    }
+      var bw = ctx.measureText(t[1]).width + 48;
+      rrect(ctx, bx0, PAD+24, bw, 64, 18); ctx.fillStyle = t[2]; ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText(t[1], bx0 + 24, PAD+57); ctx.textBaseline = 'alphabetic';
+      bx0 += bw + 14;
+    });
 
     // 分類＋編號
     var x = PAD;
