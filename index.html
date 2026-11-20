@@ -39,6 +39,18 @@ main{padding:6px 16px calc(env(safe-area-inset-bottom) + 96px)}
 .cnt{position:absolute;right:6px;bottom:6px;background:rgba(40,38,35,.55);color:#fff;font-size:11px;border-radius:8px;padding:2px 6px}
 .badges{position:absolute;left:6px;top:6px;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
 .salebadge{background:var(--rose);color:#fff;font-size:11px;border-radius:8px;padding:2px 7px}
+.item.oos .thumb::after{content:"暫時缺貨";position:absolute;inset:0;background:rgba(243,240,235,.55);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--ink);letter-spacing:2px}
+.item.off{opacity:.45}
+.offbadge{background:#6b6560;color:#fff;font-size:11px;font-weight:700;border-radius:8px;padding:2px 7px}
+.stbar{display:flex;gap:6px;margin:0 0 12px;padding:4px;background:#ebe6de;border-radius:12px}
+.stbar button{flex:1;border:0;background:transparent;border-radius:9px;padding:8px 4px;font-size:13px;color:var(--sub)}
+.stbar button.on[data-st=""]{background:var(--main);color:#fff;font-weight:700}
+.stbar button.on[data-st="暫時缺貨"]{background:var(--sand);color:var(--ink);font-weight:700}
+.stbar button.on[data-st="下架"]{background:#6b6560;color:#fff;font-weight:700}
+.stbar[hidden],.stnote[hidden],.dtabs[hidden]{display:none}
+.stbar{margin-top:4px}
+.stnote{margin:0 0 12px;padding:10px 12px;border-radius:12px;background:#f1ebe0;color:var(--ink);font-size:13px;text-align:center}
+.stnote.off{background:#e7e4e1;color:#6b6560}
 .newbadge{background:var(--blue);color:#fff;font-size:11px;font-weight:700;border-radius:8px;padding:2px 7px;letter-spacing:1px}
 .switch.inform{box-shadow:none;border:1px solid var(--line);margin-top:12px;padding:11px 14px}
 .switch.inform[hidden]{display:none}
@@ -217,6 +229,10 @@ body:not(.admin-on) .admin-only{display:none!important}
     </div>
   </div>
   <div class="sh-body">
+    <div class="stbar admin-only" id="dStatus">
+      <button data-st="">上架</button><button data-st="暫時缺貨">暫時缺貨</button><button data-st="下架">下架</button>
+    </div>
+    <div class="stnote" id="dStNote" hidden></div>
     <div class="gallery" id="dGallery"></div>
     <div class="dots" id="dDots"></div>
     <div class="dtags" id="dTags"></div>
@@ -246,6 +262,9 @@ body:not(.admin-on) .admin-only{display:none!important}
     <div class="two">
       <div class="fld"><label>商品編號</label><input id="fCode" inputmode="numeric" placeholder="例：12345"><div class="codewarn" id="codeWarn" hidden></div></div>
       <div class="fld"><label>分類</label><select id="fCat"></select></div>
+    </div>
+    <div class="fld optfld" id="fStatusBox"><label>狀態</label>
+      <select id="fStatus"><option value="">上架</option><option value="暫時缺貨">暫時缺貨</option><option value="下架">下架（一般訪客看不到）</option></select>
     </div>
     <label class="switch inform optfld" id="fNewBox">
       <div><b>新品</b><small>開啟後首頁縮圖會顯示「新品」標籤</small></div>
@@ -383,6 +402,7 @@ body:not(.admin-on) .admin-only{display:none!important}
       items = r[0].items; categories = r[1].categories || []; has = r[1].has || {}; tagOptions = r[1].tagOptions || [];
       lastFetch = Date.now();
       writeCache(); render();
+      if(deepKey){ deepKey = null; toast('這個商品已下架或不存在'); setUrl(null); }
     }).catch(function(e){ if(!silent) $('sub').textContent = '讀取失敗'; toast('讀取失敗：' + e.message); })
       .then(function(){ fetching = null; });
     return fetching;
@@ -407,22 +427,33 @@ body:not(.admin-on) .admin-only{display:none!important}
     var cats = ['全部'].concat(allCats());
     if(items.some(function(i){ return i.sale != null; })) cats.splice(1,0,'特價中');
     if(items.some(function(i){ return i.isNew; })) cats.splice(1,0,'新品');
+    if(adminView() && items.some(function(i){ return i.status === '下架'; })) cats.push('已下架');
     if(cats.indexOf(curCat) < 0) curCat = '全部';
     $('chips').innerHTML = cats.map(function(c){ return '<button class="chip'+(c===curCat?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</button>'; }).join('');
   }
-  function filtered(){
+  function adminView(){ return document.body.classList.contains('admin-on'); }
+  function matchQ(i){
     var q = $('q').value.trim().toLowerCase();
+    if(!q) return true;
+    return (i.name + ' ' + i.code + ' ' + i.barcode + ' ' + i.cat).toLowerCase().indexOf(q) >= 0;
+  }
+  function filtered(){
     var list = items.filter(function(i){
+      if(i.status === '下架' && !adminView()) return false;
+      if(curCat === '已下架') return i.status === '下架' && matchQ(i);
       if(curCat === '特價中'){ if(i.sale == null) return false; }
       else if(curCat === '新品'){ if(!i.isNew) return false; }
       else if(curCat !== '全部' && i.cat !== curCat) return false;
-      if(!q) return true;
-      return (i.name + ' ' + i.code + ' ' + i.barcode + ' ' + i.cat).toLowerCase().indexOf(q) >= 0;
+      return matchQ(i);
     });
     var s = $('sort').value;
     var eff = function(i){ return i.sale != null ? i.sale : (i.price != null ? i.price : Infinity); };
     // 特價＋新品 > 特價 > 新品 > 一般，同一級再依選擇的排序
-    var prio = function(i){ return (i.sale != null ? 2 : 0) + (i.isNew ? 1 : 0); };
+    var prio = function(i){
+      if(i.status === '下架') return -2;
+      if(i.status === '暫時缺貨') return -1;
+      return (i.sale != null ? 2 : 0) + (i.isNew ? 1 : 0);
+    };
     list.sort(function(a,b){
       var pd = prio(b) - prio(a); if(pd) return pd;
       if(s==='name') return a.name.localeCompare(b.name,'ja');
@@ -458,9 +489,11 @@ body:not(.admin-on) .admin-only{display:none!important}
     $('countTxt').textContent = '顯示 ' + list.length + ' 項';
     var card = function(i){
       var ph = i.photos[0];
-      return '<div class="item" data-id="'+i.id+'"><button class="editbtn admin-only" data-edit="'+i.id+'" title="編輯">✎</button>'+
+      var stc = i.status === '下架' ? ' off' : i.status === '暫時缺貨' ? ' oos' : '';
+      return '<div class="item'+stc+'" data-id="'+i.id+'"><button class="editbtn admin-only" data-edit="'+i.id+'" title="編輯">✎</button>'+
         '<div class="thumb">'+(ph ? '<img loading="lazy" src="'+esc(thumbUrl(ph))+'" alt="">' : '沒有照片')+
-          ((i.isNew || i.sale!=null) ? '<div class="badges">'+
+          ((i.isNew || i.sale!=null || i.status === '下架') ? '<div class="badges">'+
+            (i.status === '下架' ? '<span class="offbadge">已下架</span>' : '')+
             (i.isNew ? '<span class="newbadge">新品</span>' : '')+
             (i.sale!=null ? '<span class="salebadge">特價'+(i.saleEnd ? ' ~'+md(i.saleEnd) : '')+'</span>' : '')+'</div>' : '')+
           (i.photos.length>1 ? '<span class="cnt">'+i.photos.length+' 張</span>' : '')+'</div>'+
@@ -559,11 +592,37 @@ body:not(.admin-on) .admin-only{display:none!important}
       var v = r[1] || '—';
       return '<div class="row"><span>'+r[0]+'</span><span'+(r[2] && r[1] ? ' class="copy" data-copy="'+esc(r[1])+'"' : '')+'>'+esc(v)+'</span></div>';
     }).join('');
+    renderStatus(it);
     $('dTags').innerHTML = (it.tags || []).map(function(t){ return '<span class="dtag">'+esc(t)+'</span>'; }).join('');
     renderTabs(it);
     openSheet('detail');
     setUrl(it);
   }
+
+  // ===== 上架狀態 =====
+  function stOf(it){ return it.status === '上架' ? '' : (it.status || ''); }
+  function renderStatus(it){
+    var st = stOf(it);
+    $('dStatus').hidden = !has.status;
+    Array.prototype.forEach.call($('dStatus').querySelectorAll('button'), function(b){ b.classList.toggle('on', b.getAttribute('data-st') === st); });
+    var note = st === '暫時缺貨' ? '目前暫時缺貨，到貨後會恢復販售' : st === '下架' ? '此商品已下架，一般訪客看不到' : '';
+    $('dStNote').hidden = !note;
+    $('dStNote').textContent = note;
+    $('dStNote').className = 'stnote' + (st === '下架' ? ' off' : '');
+  }
+  function setStatus(st){
+    var it = curItem; if(!it || stOf(it) === st) return;
+    loading(true, '更新狀態中…');
+    api({ action:'update', pageId:it.id, data:{ status: st || '上架' } }).then(function(r){
+      items = items.map(function(i){ return i.id === r.item.id ? r.item : i; });
+      curItem = r.item;
+      writeCache(); render(); showDetail(r.item);
+      toast('已改為「' + (st || '上架') + '」');
+    }).catch(function(e){ toast('更新失敗：' + e.message); }).then(function(){ loading(false); });
+  }
+  $('dStatus').addEventListener('click', function(e){
+    var b = e.target.closest('[data-st]'); if(b) setStatus(b.getAttribute('data-st'));
+  });
 
   var TABS = [['info','商品資料'], ['desc','商品說明']];
   function renderTabs(it){
@@ -593,6 +652,8 @@ body:not(.admin-on) .admin-only{display:none!important}
     $('fTagsBox').hidden = !has.tags; $('fDescBox').hidden = !has.desc;
     $('fWeightBox').hidden = !has.weight;
     $('fNewBox').hidden = !has.isNew;
+    $('fStatusBox').hidden = !has.status;
+    $('fStatus').value = it ? (it.status === '上架' ? '' : (it.status || '')) : '';
     $('fNew').checked = !!(it && it.isNew);
     $('fWeight').value = it && it.weight != null ? it.weight : '';
     $('fTags').value = it && it.tags ? it.tags.join(', ') : '';
@@ -687,6 +748,7 @@ body:not(.admin-on) .admin-only{display:none!important}
     if(has.desc) data.desc = $('fDesc').value.trim();
     if(has.weight) data.weight = $('fWeight').value.trim();
     if(has.isNew) data.isNew = $('fNew').checked;
+    if(has.status) data.status = $('fStatus').value || '上架';
     if(data.saleEnd && !data.saleStart){ data.saleStart = today(); $('fSaleStart').value = data.saleStart; }
     if(data.saleStart && data.saleEnd && data.saleEnd < data.saleStart){ toast('特價結束日不能早於開始日'); $('fSaleEnd').focus(); return; }
     var localDup = localDupItem(data.code);
@@ -1206,7 +1268,7 @@ body:not(.admin-on) .admin-only{display:none!important}
     loading(true, '驗證中…');
     fetch('/api/notion', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'auth', adminKey: pw }) })
       .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || '驗證失敗'); }); })
-      .then(function(){ setKey(pw); setShow(true); applyAdmin(); openSettings(); toast('已解鎖'); })
+      .then(function(){ setKey(pw); setShow(true); applyAdmin(); openSettings(); toast('已解鎖'); clearCache(); load(true); })
       .catch(function(e){ toast(e.message); $('pwInput').select(); })
       .then(function(){ loading(false); });
   }
@@ -1218,8 +1280,8 @@ body:not(.admin-on) .admin-only{display:none!important}
     $('pwInput').focus();
   });
   $('pwInput').addEventListener('keydown', function(e){ if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); unlock(); } });
-  $('adminToggle').addEventListener('change', function(){ setShow(this.checked); applyAdmin(); toast(this.checked ? '已顯示管理功能' : '已隱藏管理功能'); });
-  $('logoutBtn').addEventListener('click', function(){ setKey(''); applyAdmin(); closeSheets(); toast('已鎖定'); });
+  $('adminToggle').addEventListener('change', function(){ setShow(this.checked); applyAdmin(); render(); toast(this.checked ? '已顯示管理功能' : '已隱藏管理功能'); });
+  $('logoutBtn').addEventListener('click', function(){ setKey(''); applyAdmin(); closeSheets(); clearCache(); load(true); toast('已鎖定'); });
 
   applyAdmin();
   load(false);

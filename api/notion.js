@@ -27,6 +27,7 @@ const P = {
   desc: '詳細說明',   // Text（選用）
   weight: '重量',     // Number（選用，單位 kg）
   isNew: '新品',      // Checkbox（選用）
+  status: '狀態',     // Select：上架／暫時缺貨／下架（選用，空白＝上架）
   tags: '重點'        // Multi-select（選用）
 };
 
@@ -80,6 +81,7 @@ function simplify(page) {
     desc: txt(p[P.desc] && p[P.desc].rich_text),
     weight: p[P.weight] && p[P.weight].number != null ? p[P.weight].number : null,
     isNew: !!(p[P.isNew] && p[P.isNew].checkbox),
+    status: (p[P.status] && p[P.status].select && p[P.status].select.name) || '',
     tags: ((p[P.tags] && p[P.tags].multi_select) || []).map(o => o.name),
     edited: page.last_edited_time
   };
@@ -107,6 +109,7 @@ function buildProps(d) {
   if ('desc' in d) props[P.desc] = { rich_text: rich(d.desc) };
   if ('weight' in d) props[P.weight] = { number: numOrNull(d.weight) };
   if ('isNew' in d) props[P.isNew] = { checkbox: !!d.isNew };
+  if ('status' in d) props[P.status] = { select: d.status ? { name: String(d.status).slice(0, 100) } : null };
   if ('tags' in d) {
     const list = (Array.isArray(d.tags) ? d.tags : String(d.tags || '').split(/[,，、]/))
       .map(t => String(t).trim().replace(/,/g, '，').slice(0, 100)).filter(Boolean);
@@ -198,7 +201,7 @@ module.exports = async (req, res) => {
         const tg = db.properties[P.tags] && db.properties[P.tags].multi_select;
         // 回傳選用欄位是否存在，前端只送出 Notion 有建立的欄位
         const has = {};
-        ['desc', 'tags', 'weight', 'isNew'].forEach(k => { has[k] = !!db.properties[P[k]]; });
+        ['desc', 'tags', 'weight', 'isNew', 'status'].forEach(k => { has[k] = !!db.properties[P[k]]; });
         return res.json({ categories: sel ? sel.options.map(o => o.name) : [], tagOptions: tg ? tg.options.map(o => o.name) : [], has });
       }
 
@@ -214,7 +217,10 @@ module.exports = async (req, res) => {
           results = results.concat(q.results);
           cursor = q.has_more ? q.next_cursor : undefined;
         } while (cursor);
-        return res.json({ items: results.map(simplify) });
+        // 一般訪客拿不到「下架」商品；輸入管理密碼才會回傳全部
+        let list = results.map(simplify);
+        if (!passOk(b.adminKey)) list = list.filter(i => i.status !== '下架');
+        return res.json({ items: list });
       }
 
       case 'upload': {
