@@ -176,7 +176,7 @@ body:not(.admin-on) .admin-only{display:none!important}
 .ctot{display:flex;justify-content:space-between;align-items:center;font-size:14px}
 .ctot b{font-size:24px}
 .csave{font-size:12px;color:var(--rose-d)}
-.cbtns{display:flex;gap:10px;margin-top:10px}.cbtns .btn:first-child{flex:1}.cbtns .btn:last-child{flex:1.5}
+.cbtns{display:flex;margin-top:10px}.cbtns .btn{flex:1}
 .empty{text-align:center;color:var(--sub);padding:60px 10px}
 .fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 18px);z-index:30;width:60px;height:60px;border-radius:20px;border:0;background:var(--main);color:#fff;font-size:30px;box-shadow:0 6px 18px rgba(80,95,80,.35)}
 /* sheet */
@@ -277,7 +277,7 @@ body:not(.admin-on) .admin-only{display:none!important}
   </div>
   <div class="cfoot" id="cFoot">
     <div class="ctot"><div><div id="cTotalLbl">合計</div><div class="csave" id="cSave"></div></div><b id="cTotal">¥0</b></div>
-    <div class="cbtns"><button class="btn ghost" id="cCopy">📋 複製文字</button><button class="btn" id="cExport">🖼 匯出清單圖片</button></div>
+    <div class="cbtns"><button class="btn" id="cExport">🖼 匯出清單圖片</button></div>
   </div>
 </div>
 
@@ -1544,10 +1544,6 @@ body:not(.admin-on) .admin-only{display:none!important}
     out.push('※ 價格為日本好市多現場價格（日幣），實際以購買當日現場為準');
     return out.join('\n');
   }
-  $('cCopy').addEventListener('click', function(){
-    if(needName()) return;
-    copyText(cartText()).then(function(){ toast('已複製清單文字，可以直接貼到 LINE'); }, function(){ toast('複製失敗'); });
-  });
 
   // --- 匯出清單圖片 ---
   function loadThumb(u){
