@@ -1785,8 +1785,12 @@ body:not(.admin-on) .admin-only{display:none!important}
       // 補充：省多少 或 商品編號
       ctx.font = (it.sale != null ? '700 ' : '') + metaF + 'px ' + CARD_FONT;
       var my = py + Math.round(14*s) + metaF;
-      if(it.sale != null && it.price != null && it.price > it.sale){ ctx.fillStyle = '#a8807a'; ctx.fillText('省 ' + yen(it.price - it.sale) + (it.code ? '　#' + it.code : ''), tx, my); }
-      else { ctx.fillStyle = '#8b857d'; ctx.fillText(it.code ? '#' + it.code : '', tx, my); }
+      if(it.sale != null && it.price != null && it.price > it.sale){ ctx.fillStyle = '#a8807a'; ctx.fillText('省 ' + yen(it.price - it.sale), tx, my); }
+      // 商品編號：靠右、藍灰色
+      if(it.code){
+        ctx.font = '600 ' + metaF + 'px ' + CARD_FONT; ctx.fillStyle = '#6f8294'; ctx.textAlign = 'right';
+        ctx.fillText('#' + it.code, x + CW - ip, my); ctx.textAlign = 'left';
+      }
     });
     // 頁尾
     y += rows * (CH + GAP) + 20;
