@@ -189,6 +189,26 @@ body:not(.admin-on) .admin-only{display:none!important}
 .ctot b{font-size:24px}
 .csave{font-size:12px;color:var(--rose-d)}
 .cbtns{display:flex;margin-top:10px}.cbtns .btn{flex:1}
+.viewbadge{position:absolute;left:6px;bottom:6px;background:rgba(40,38,35,.6);color:#fff;font-size:11px;border-radius:8px;padding:2px 7px}
+body:not(.admin-on) .viewbadge{display:none}
+.dviews{margin:0 0 12px;padding:9px 12px;border-radius:12px;background:#e9edf0;color:#4f5f6c;font-size:13px;text-align:center}
+.dviews[hidden]{display:none}
+.vstat{margin-top:16px;background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:14px}
+.vstat h4{margin:0 0 10px;font-size:15px;display:flex;align-items:center;justify-content:space-between}
+.vstat h4 button{border:0;background:transparent;color:var(--sub);font-size:13px}
+.vnums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+.vnums div{background:var(--bg);border-radius:10px;padding:8px 2px}
+.vnums b{display:block;font-size:18px}.vnums small{font-size:11px;color:var(--sub)}
+.vchart{display:flex;align-items:flex-end;gap:2px;height:80px;margin:14px 0 4px;border-bottom:1px solid var(--line)}
+.vchart i{flex:1;background:var(--main);border-radius:3px 3px 0 0;min-height:2px;opacity:.85}
+.vchart i.td{background:var(--rose-d)}
+.vaxis{display:flex;justify-content:space-between;font-size:10px;color:var(--sub)}
+.vtop{margin-top:14px}
+.vtop h5{margin:0 0 6px;font-size:13px;color:var(--sub);font-weight:600}
+.vtop ol{margin:0;padding-left:22px}
+.vtop li{font-size:13px;padding:5px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.vtop li span{float:right;color:var(--sub)}
+.vnote{font-size:12px;color:var(--sub);line-height:1.6}
 .empty{text-align:center;color:var(--sub);padding:60px 10px}
 .fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 18px);z-index:30;width:60px;height:60px;border-radius:20px;border:0;background:var(--main);color:#fff;font-size:30px;box-shadow:0 6px 18px rgba(80,95,80,.35)}
 /* sheet */
@@ -309,6 +329,7 @@ body:not(.admin-on) .admin-only{display:none!important}
       <button data-st="">上架</button><button data-st="暫時缺貨">暫時缺貨</button><button data-st="下架">下架</button>
     </div>
     <div class="stnote" id="dStNote" hidden></div>
+    <div class="dviews admin-only" id="dViews" hidden></div>
     <div class="gallery" id="dGallery"></div>
     <div class="dots" id="dDots"></div>
     <div class="dtags" id="dTags"></div>
@@ -406,6 +427,10 @@ body:not(.admin-on) .admin-only{display:none!important}
       </label>
       <div class="btns"><button class="btn ghost" id="logoutBtn">鎖定（登出）</button></div>
       <div class="lockinfo">這個設定只會記在目前這台裝置。其他人沒有密碼，永遠看不到管理功能，也無法透過網址修改資料。</div>
+      <div class="vstat" id="vStat">
+        <h4>👁 瀏覽統計 <button id="vRefresh">↻ 更新</button></h4>
+        <div id="vBody" class="vnote">讀取中…</div>
+      </div>
     </div>
   </div>
 </div>
@@ -545,6 +570,7 @@ body:not(.admin-on) .admin-only{display:none!important}
       return (i.sale != null ? 2 : 0) + (i.isNew ? 1 : 0);
     };
     list.sort(function(a,b){
+      if(s==='hot'){ var hd = (b.status === '下架' ? -1 : viewsOf(b).t) - (a.status === '下架' ? -1 : viewsOf(a).t); if(hd) return hd; return b.edited.localeCompare(a.edited); }
       var pd = prio(b) - prio(a); if(pd) return pd;
       if(s==='name') return a.name.localeCompare(b.name,'ja');
       if(s==='code') return a.code.localeCompare(b.code,'ja',{numeric:true});
@@ -586,7 +612,8 @@ body:not(.admin-on) .admin-only{display:none!important}
             (i.status === '下架' ? '<span class="offbadge">已下架</span>' : '')+
             (i.isNew ? '<span class="newbadge">新品</span>' : '')+
             (i.sale!=null ? '<span class="salebadge">特價'+(i.saleEnd ? ' ~'+md(i.saleEnd) : '')+'</span>' : '')+'</div>' : '')+
-          (i.photos.length>1 ? '<span class="cnt">'+i.photos.length+' 張</span>' : '')+'</div>'+
+          (i.photos.length>1 ? '<span class="cnt">'+i.photos.length+' 張</span>' : '')+
+          (vStats && adminView() ? '<span class="viewbadge">👁 '+viewsOf(i).t+'</span>' : '')+'</div>'+
         '<div class="info"><div class="nm">'+esc(i.name || '（未命名）')+'</div>'+
           (i.code ? '<div class="meta">#'+esc(i.code)+'</div>' : '')+
           '<div class="pricerow"><div class="prices">'+priceHtml(i)+'</div>'+
@@ -685,6 +712,8 @@ body:not(.admin-on) .admin-only{display:none!important}
     }).join('');
     renderStatus(it);
     renderDetailCart(it);
+    renderDetailViews(it);
+    countItemView(it);
     $('dTags').innerHTML = (it.tags || []).map(function(t){ return '<span class="dtag">'+esc(t)+'</span>'; }).join('');
     renderTabs(it);
     openSheet('detail');
@@ -1856,6 +1885,7 @@ body:not(.admin-on) .admin-only{display:none!important}
     $('adminToggle').checked = getShow();
     $('pwInput').value = '';
     closeSheets(); openSheet('settings');
+    if(on) loadStats();
     if(!on) setTimeout(function(){ $('pwInput').focus(); }, 300);
   }
   function unlock(){
@@ -1876,12 +1906,84 @@ body:not(.admin-on) .admin-only{display:none!important}
     $('pwInput').focus();
   });
   $('pwInput').addEventListener('keydown', function(e){ if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); unlock(); } });
-  $('adminToggle').addEventListener('change', function(){ setShow(this.checked); applyAdmin(); render(); toast(this.checked ? '已顯示管理功能' : '已隱藏管理功能'); });
-  $('logoutBtn').addEventListener('click', function(){ setKey(''); applyAdmin(); closeSheets(); clearCache(); load(true); toast('已鎖定'); });
+  $('adminToggle').addEventListener('change', function(){ setShow(this.checked); applyAdmin(); syncHotOption(); render(); toast(this.checked ? '已顯示管理功能' : '已隱藏管理功能'); });
+  $('logoutBtn').addEventListener('click', function(){ setKey(''); vStats = null; applyAdmin(); syncHotOption(); closeSheets(); clearCache(); load(true); toast('已鎖定'); });
+
+  // ===== 瀏覽次數 =====
+  var vStats = null;
+  var VSEEN_KEY = 'costco_vseen_v1';
+  function normPid(id){ return String(id || '').replace(/-/g, '').toLowerCase(); }
+  function viewsOf(it){ return (vStats && vStats.items && vStats.items[normPid(it.id)]) || { t:0, d:0, w:0 }; }
+  function vSeen(){
+    var o = null; try{ o = JSON.parse(localStorage.getItem(VSEEN_KEY)); }catch(e){}
+    if(!o || o.date !== today()) o = { date: today(), site: false, ids: [] };
+    return o;
+  }
+  function vSave(o){ try{ localStorage.setItem(VSEEN_KEY, JSON.stringify(o)); }catch(e){} }
+  // 同一位訪客同一天只算 1 次；管理者（有輸入密碼）不計算
+  function countSiteView(){
+    if(getKey()) return;
+    var o = vSeen(); if(o.site) return;
+    o.site = true; vSave(o);
+    api({ action:'view', type:'site' }).catch(function(){});
+  }
+  function countItemView(it){
+    if(getKey() || !it) return;
+    var o = vSeen(), id = normPid(it.id);
+    if(o.ids.indexOf(id) >= 0) return;
+    o.ids.push(id); if(o.ids.length > 500) o.ids = o.ids.slice(-500); vSave(o);
+    api({ action:'view', type:'item', id: it.id }).catch(function(){});
+  }
+  function renderDetailViews(it){
+    var show = !!(vStats && getKey());
+    $('dViews').hidden = !show;
+    if(show){ var v = viewsOf(it); $('dViews').textContent = '👁 瀏覽　今天 ' + v.d + '・7 天 ' + v.w + '・累計 ' + v.t; }
+  }
+  function syncHotOption(){
+    var sel = $('sort'), opt = sel.querySelector('option[value="hot"]'), want = !!(vStats && adminView());
+    if(want && !opt){ opt = document.createElement('option'); opt.value = 'hot'; opt.textContent = '最熱門（瀏覽次數）'; sel.appendChild(opt); }
+    if(!want && opt){ if(sel.value === 'hot') sel.value = 'edited'; opt.remove(); }
+  }
+  function loadStats(){
+    if(!getKey()) return Promise.resolve();
+    $('vBody').className = 'vnote'; $('vBody').textContent = '讀取中…';
+    return api({ action:'stats' }).then(function(r){
+      if(!r.enabled){
+        vStats = null;
+        $('vBody').innerHTML = '尚未啟用。請到 Vercel 專案 → Storage → 建立 <b>Upstash for Redis</b>（Free）並連接這個專案，然後 Redeploy。';
+        return;
+      }
+      vStats = r; renderStats(); syncHotOption(); render();
+      if(curItem && $('detail').classList.contains('show')) renderDetailViews(curItem);
+    }).catch(function(e){ $('vBody').textContent = '讀取失敗：' + e.message; });
+  }
+  function renderStats(){
+    var s = vStats.site, max = Math.max.apply(null, s.daily.map(function(d){ return d.n; }).concat([1]));
+    var top = items.filter(function(i){ return viewsOf(i).t > 0; })
+      .sort(function(a, b){ return viewsOf(b).w - viewsOf(a).w || viewsOf(b).t - viewsOf(a).t; }).slice(0, 10);
+    $('vBody').className = '';
+    $('vBody').innerHTML =
+      '<div class="vnums"><div><b>' + s.today + '</b><small>今天</small></div><div><b>' + s.d7 + '</b><small>7 天</small></div>' +
+      '<div><b>' + s.d30 + '</b><small>30 天</small></div><div><b>' + s.total + '</b><small>累計</small></div></div>' +
+      '<div class="vchart">' + s.daily.map(function(d, k){
+        return '<i class="' + (k === s.daily.length - 1 ? 'td' : '') + '" style="height:' + Math.max(2, Math.round(d.n / max * 100)) + '%" title="' + d.date + '：' + d.n + '"></i>';
+      }).join('') + '</div>' +
+      '<div class="vaxis"><span>' + md(s.daily[0].date) + '</span><span>最近 30 天每日瀏覽人次</span><span>今天</span></div>' +
+      '<div class="vtop"><h5>熱門商品 Top 10（依 7 天瀏覽）</h5>' +
+      (top.length ? '<ol>' + top.map(function(i){ var v = viewsOf(i);
+        return '<li data-vopen="' + i.id + '">' + esc(i.name || '（未命名）') + '<span>7 天 ' + v.w + '・累計 ' + v.t + '</span></li>'; }).join('') + '</ol>'
+        : '<div class="vnote">還沒有商品瀏覽紀錄</div>') + '</div>' +
+      '<div class="vnote" style="margin-top:10px">同一位訪客同一天只算一次；你解鎖後的瀏覽不列入計算。</div>';
+  }
+  $('vRefresh').addEventListener('click', loadStats);
+  $('vBody').addEventListener('click', function(e){
+    var li = e.target.closest('[data-vopen]'); if(!li) return;
+    var it = itemById(li.getAttribute('data-vopen')); if(it){ closeSheets(); showDetail(it); }
+  });
 
   applyAdmin();
   updateCartUI();
-  load(false);
+  load(false).then(function(){ countSiteView(); if(getKey()) loadStats(); });
 })();
 </script>
 </body>

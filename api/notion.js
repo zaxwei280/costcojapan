@@ -166,7 +166,35 @@ function dupMsg(code, name) {
 }
 
 // 需要管理密碼的動作
-const WRITE_ACTIONS = ['upload', 'create', 'update', 'archive', 'checkCode', 'auth'];
+const WRITE_ACTIONS = ['upload', 'create', 'update', 'archive', 'checkCode', 'auth', 'stats'];
+
+// ===== 瀏覽次數（Upstash Redis，Vercel Storage 建立後自動提供環境變數）=====
+function envEnding(re, exclude) {
+  const k = Object.keys(process.env).find(n => re.test(n) && !(exclude && exclude.test(n)) && process.env[n]);
+  return k ? process.env[k] : '';
+}
+const R_URL = () => envEnding(/(KV_REST_API_URL|UPSTASH_REDIS_REST_URL)$/);
+const R_TOKEN = () => envEnding(/(KV_REST_API_TOKEN|UPSTASH_REDIS_REST_TOKEN)$/, /READ_ONLY/);
+async function redis(cmds) {
+  const r = await fetch(R_URL().replace(/\/$/, '') + '/pipeline', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + R_TOKEN(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(cmds)
+  });
+  const j = await r.json();
+  if (!r.ok || !Array.isArray(j)) throw new Error((j && j.error) || '計數資料庫錯誤');
+  return j.map(x => x.result);
+}
+// 日本時間的日期 YYYY-MM-DD
+function jstDate(offsetDays) {
+  return new Date(Date.now() + 9 * 3600e3 - (offsetDays || 0) * 86400e3).toISOString().slice(0, 10);
+}
+function hashObj(arr) {
+  const o = {};
+  for (let i = 0; arr && i < arr.length; i += 2) o[arr[i]] = Number(arr[i + 1]) || 0;
+  return o;
+}
+
 
 function passOk(input) {
   const pw = process.env.ADMIN_PASSWORD || '';
@@ -195,6 +223,44 @@ module.exports = async (req, res) => {
 
   try {
     switch (b.action) {
+      case 'view': {
+        if (!R_URL() || !R_TOKEN()) return res.json({ ok: false });
+        const d = jstDate(0);
+        if (b.type === 'site') {
+          await redis([['INCR', 'v:site:total'], ['INCR', 'v:site:d:' + d], ['EXPIRE', 'v:site:d:' + d, 3456000]]);
+        } else if (b.type === 'item' && /^[0-9a-f-]{32,36}$/i.test(String(b.id || ''))) {
+          const id = String(b.id).replace(/-/g, '').toLowerCase();
+          await redis([['HINCRBY', 'v:item:total', id, 1], ['HINCRBY', 'v:item:d:' + d, id, 1], ['EXPIRE', 'v:item:d:' + d, 864000]]);
+        }
+        return res.json({ ok: true });
+      }
+
+      case 'stats': {
+        if (!R_URL() || !R_TOKEN()) return res.json({ enabled: false });
+        const days30 = []; for (let i = 29; i >= 0; i--) days30.push(jstDate(i));
+        const days7 = days30.slice(-7);
+        const out = await redis(
+          [['GET', 'v:site:total'], ['MGET'].concat(days30.map(d => 'v:site:d:' + d)), ['HGETALL', 'v:item:total']]
+            .concat(days7.map(d => ['HGETALL', 'v:item:d:' + d]))
+        );
+        const daily = days30.map((d, i) => ({ date: d, n: Number(out[1][i]) || 0 }));
+        const sum = a => a.reduce((s, x) => s + x.n, 0);
+        const totals = hashObj(out[2]);
+        const dayHashes = out.slice(3).map(hashObj);
+        const items = {};
+        Object.keys(totals).forEach(id => { items[id] = { t: totals[id], d: 0, w: 0 }; });
+        dayHashes.forEach((h, i) => Object.keys(h).forEach(id => {
+          items[id] = items[id] || { t: 0, d: 0, w: 0 };
+          items[id].w += h[id];
+          if (i === dayHashes.length - 1) items[id].d = h[id];
+        }));
+        return res.json({
+          enabled: true,
+          site: { total: Number(out[0]) || 0, today: daily[29].n, d7: sum(daily.slice(-7)), d30: sum(daily), daily },
+          items
+        });
+      }
+
       case 'schema': {
         const db = await notion('/databases/' + DB);
         const sel = db.properties[P.cat] && db.properties[P.cat].select;
