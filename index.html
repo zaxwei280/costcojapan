@@ -103,6 +103,18 @@ body:not(.admin-on) .admin-only{display:none!important}
 .cardview.show{display:flex}
 .cv-img{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
 .cv-img img{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;-webkit-touch-callout:default}
+.cv-pages{display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;text-align:center}
+.cv-pages img{display:block;width:100%;max-width:520px;margin:0 auto 14px;border-radius:12px;-webkit-touch-callout:default}
+.cv-pg{color:#ddd;font-size:13px;margin:4px 0 6px}
+.cardview.multi .cv-img{display:none}
+.cardview.multi .cv-pages{display:block}
+.fpick{position:fixed;inset:0;z-index:66;background:rgba(40,38,35,.5);display:none;align-items:center;justify-content:center;padding:24px}
+.fpick.show{display:flex}
+.fp-box{background:var(--bg);border-radius:20px;padding:22px 18px 16px;width:100%;max-width:340px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+.fp-box h3{margin:0 0 14px;text-align:center;font-size:17px}
+.fp-box .btn{width:100%;margin-top:10px}
+.fp-box .btn:disabled{opacity:.4}
+.fp-sale{background:#b58b85}.fp-new{background:#7f909f}
 .cv-tip{text-align:center;color:#bbb;font-size:12px;margin:10px 0 4px}
 .cv-btns{display:flex;gap:10px;margin-top:8px;max-width:520px;width:100%;align-self:center}
 .cv-btns .btn[hidden]{display:none}
@@ -370,6 +382,7 @@ body:not(.admin-on) .admin-only{display:none!important}
 <div class="viewer" id="viewer"><img id="vImg" alt=""></div>
 <div class="cardview" id="cardView">
   <div class="cv-img"><img id="cardImg" alt="商品小卡"></div>
+  <div class="cv-pages" id="cardPages"></div>
   <div class="cv-tip">iPhone 也可以長按圖片 →「加入照片」</div>
   <div class="cv-btns">
     <button class="btn ghost" id="cardClose">關閉</button>
@@ -406,6 +419,15 @@ body:not(.admin-on) .admin-only{display:none!important}
       <button class="btn ghost" id="cfmNo">取消</button>
       <button class="btn cfm-yes" id="cfmYes">確定刪除</button>
     </div>
+  </div>
+</div>
+<div class="fpick" id="flyerPick">
+  <div class="fp-box">
+    <h3>要產生哪一種傳單？</h3>
+    <button class="btn fp-sale" id="fpSale">特價傳單</button>
+    <button class="btn fp-new" id="fpNew">新品上架傳單</button>
+    <button class="btn ghost" id="fpCancel">取消</button>
+    <div class="lockinfo" style="text-align:center">每張最多 12 項，超過會自動分成多張</div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -1234,7 +1256,7 @@ body:not(.admin-on) .admin-only{display:none!important}
       $('cardImg').src = cardUrl;
       cardCanShare = !!(navigator.canShare && navigator.share && navigator.canShare({ files:[cardFile] }));
       $('cardShare').textContent = cardCanShare ? '分享／存相簿' : '下載小卡';
-      $('cardView').classList.add('show');
+      $('cardView').classList.remove('multi'); $('cardView').classList.add('show');
     }).catch(function(e){ toast('匯出失敗：' + e.message); })
       .then(function(){ loading(false); });
   }
@@ -1327,16 +1349,22 @@ body:not(.admin-on) .admin-only{display:none!important}
   var cardCanShare = false, cardMode = 'item';
   $('cardShare').addEventListener('click', function(){
     if(cardMode === 'flyer'){
-      if(!cardFile) return;
+      if(!flyerFiles.length) return;
       var link = location.origin + location.pathname;
+      var ftitle = flyerType === 'sale' ? '好市多特價情報' : '好市多新品上架';
       if(!cardCanShare){
-        var a3 = document.createElement('a'); a3.href = cardUrl; a3.download = cardFile.name;
-        document.body.appendChild(a3); a3.click(); a3.remove();
-        copyText(link).then(function(){ toast('已下載傳單，網站連結也已複製'); }, function(){});
+        copyText(link).catch(function(){});
+        if(flyerFiles.length === 1){ saveBlob(flyerFiles[0], flyerFiles[0].name); toast('已下載傳單，網站連結也已複製'); return; }
+        loading(true, '壓縮中…');
+        loadJSZip().then(function(JSZip){
+          var zip = new JSZip(); flyerFiles.forEach(function(f){ zip.file(f.name, f); });
+          return zip.generateAsync({ type:'blob' });
+        }).then(function(z){ saveBlob(z, ftitle + '_' + today() + '_' + flyerFiles.length + '張.zip'); toast('已下載 ' + flyerFiles.length + ' 張傳單，網站連結也已複製'); })
+          .catch(function(e){ toast('下載失敗：' + e.message); }).then(function(){ loading(false); });
         return;
       }
       copyText(link).catch(function(){});
-      navigator.share({ files:[cardFile], title:'好市多特價＆新品情報', text:'好市多特價＆新品情報（' + todayStr() + '）\n更多商品：' + link }).catch(function(){});
+      navigator.share({ files:flyerFiles, title:ftitle, text: ftitle + '（' + todayStr() + '）\n更多商品：' + link }).catch(function(){});
       return;
     }
     if(cardMode === 'cart'){
@@ -1667,20 +1695,24 @@ body:not(.admin-on) .admin-only{display:none!important}
         $('cardImg').src = cardUrl;
         cardCanShare = !!(navigator.canShare && navigator.share && navigator.canShare({ files:[cardFile] }));
         $('cardShare').textContent = cardCanShare ? '分享／存相簿' : '下載圖片';
-        $('cardView').classList.add('show');
+        $('cardView').classList.remove('multi'); $('cardView').classList.add('show');
       }).catch(function(e){ toast('匯出失敗：' + e.message); })
       .then(function(){ loading(false); });
   }
   $('cExport').addEventListener('click', exportCartImage);
 
-  // ===== 特價＆新品傳單（管理者）=====
-  function flyerLists(){
+  // ===== 特價傳單／新品上架傳單（管理者）=====
+  var FLYER_MAX = 12;
+  var flyerFiles = [], flyerUrls = [], flyerType = 'sale';
+  function flyerList(type){
     var ok = items.filter(function(i){ var st = stOf(i); return st !== '下架' && st !== '暫時缺貨'; });
-    var sale = ok.filter(function(i){ return i.sale != null; })
-      .sort(function(a, b){ return (a.saleEnd || '9999').localeCompare(b.saleEnd || '9999') || a.name.localeCompare(b.name, 'ja'); });
-    var news = ok.filter(function(i){ return i.isNew && i.sale == null; })
+    if(type === 'sale'){
+      // 到期日越近排越前面；沒設結束日的排最後
+      return ok.filter(function(i){ return i.sale != null; })
+        .sort(function(a, b){ return (a.saleEnd || '9999-99-99').localeCompare(b.saleEnd || '9999-99-99') || a.name.localeCompare(b.name, 'ja'); });
+    }
+    return ok.filter(function(i){ return i.isNew; })
       .sort(function(a, b){ return b.edited.localeCompare(a.edited); });
-    return { sale:sale, news:news };
   }
   function loadSquare(u){
     return new Promise(function(resolve){
@@ -1690,114 +1722,128 @@ body:not(.admin-on) .admin-only{display:none!important}
       img.src = cdn(u, 'c_fill,w_600,h_600,q_auto,f_jpg');
     });
   }
-  function drawFlyer(L, imgs){
-    var total = L.sale.length + L.news.length;
-    var W = 1080, PAD = 56, GAP = 24, cols = total > 10 ? 3 : 2;
+  function drawFlyerPage(type, list, imgs, page, pages, total, cols){
+    var isSale = type === 'sale';
+    var accent = isSale ? '#c49a94' : '#8e9fae', head = isSale ? '#b58b85' : '#7f909f';
+    var W = 1080, PAD = 56, GAP = 24;
     var CW = Math.floor((W - PAD*2 - GAP*(cols - 1)) / cols), s = cols === 3 ? 0.72 : 1;
     var nameF = Math.round(34*s), lh = Math.round(46*s), priceF = Math.round(54*s), metaF = Math.round(26*s), ip = Math.round(20*s);
     var infoH = ip + 2*lh + Math.round(10*s) + priceF + Math.round(14*s) + metaF + ip + 6;
-    var CH = CW + infoH, HEAD = 300, SEC = 110, FOOT = 190;
-    var sections = [];
-    if(L.sale.length) sections.push({ title:'特價中', color:'#c49a94', list:L.sale });
-    if(L.news.length) sections.push({ title:'新品上架', color:'#8e9fae', list:L.news });
-    var H = HEAD + FOOT;
-    sections.forEach(function(sec){ H += SEC + Math.ceil(sec.list.length / cols) * (CH + GAP); });
+    var CH = CW + infoH, HEAD = 270, FOOT = 190;
+    var rows = Math.ceil(list.length / cols);
+    var H = HEAD + rows * (CH + GAP) + FOOT;
     var c = document.createElement('canvas'); c.width = W; c.height = H;
     var ctx = c.getContext('2d');
     ctx.fillStyle = '#f3f0eb'; ctx.fillRect(0, 0, W, H);
     // 標題
-    ctx.fillStyle = '#8a9a8b'; ctx.fillRect(0, 0, W, 240);
-    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = '600 34px ' + CARD_FONT; ctx.fillText('日本好市多 Costco Japan', PAD, 82);
-    ctx.fillStyle = '#fff'; ctx.font = '800 76px ' + CARD_FONT; ctx.fillText('特價＆新品情報', PAD, 172);
-    ctx.font = '600 30px ' + CARD_FONT; ctx.textAlign = 'right';
-    ctx.fillText(todayStr() + ' 更新', W - PAD, 82);
-    ctx.fillText('特價 ' + L.sale.length + '・新品 ' + L.news.length, W - PAD, 172);
+    ctx.fillStyle = head; ctx.fillRect(0, 0, W, 220);
+    ctx.fillStyle = 'rgba(255,255,255,.88)'; ctx.font = '600 34px ' + CARD_FONT; ctx.fillText('日本好市多 Costco Japan', PAD, 78);
+    ctx.fillStyle = '#fff'; ctx.font = '800 80px ' + CARD_FONT; ctx.fillText(isSale ? '特價情報' : '新品上架', PAD, 170);
+    ctx.textAlign = 'right'; ctx.font = '600 30px ' + CARD_FONT;
+    ctx.fillText(todayStr() + ' 更新', W - PAD, 78);
+    ctx.fillText('共 ' + total + ' 項' + (pages > 1 ? '・第 ' + page + '/' + pages + ' 頁' : ''), W - PAD, 166);
     ctx.textAlign = 'left';
-    var y = HEAD - 20, n = 0;
-    sections.forEach(function(sec){
-      // 區塊標題
-      ctx.fillStyle = sec.color; rrect(ctx, PAD, y + 28, 10, 50, 5); ctx.fill();
-      ctx.fillStyle = '#3d3a36'; ctx.font = '800 48px ' + CARD_FONT; ctx.fillText(sec.title, PAD + 28, y + 70);
-      var stw = ctx.measureText(sec.title).width;
-      ctx.font = '600 30px ' + CARD_FONT; ctx.fillStyle = '#8b857d';
-      ctx.fillText(sec.list.length + ' 項', PAD + 28 + stw + 20, y + 70);
-      y += SEC;
-      sec.list.forEach(function(it, k){
-        var col = k % cols, row = Math.floor(k / cols);
-        var x = PAD + col * (CW + GAP), cy = y + row * (CH + GAP);
-        ctx.save(); ctx.shadowColor = 'rgba(60,55,50,.10)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 4;
-        rrect(ctx, x, cy, CW, CH, 22); ctx.fillStyle = '#fbfaf7'; ctx.fill(); ctx.restore();
-        // 照片
-        ctx.save(); rrect(ctx, x, cy, CW, CW, 22); ctx.clip();
-        ctx.fillStyle = '#ebe6de'; ctx.fillRect(x, cy, CW, CW);
-        var img = imgs && imgs[n];
-        if(img){ var sc = Math.max(CW / img.naturalWidth, CW / img.naturalHeight), iw = img.naturalWidth*sc, ih = img.naturalHeight*sc;
-          ctx.drawImage(img, x + (CW - iw)/2, cy + (CW - ih)/2, iw, ih); }
-        else { ctx.fillStyle = '#8b857d'; ctx.font = Math.round(26*s) + 'px ' + CARD_FONT; ctx.textAlign = 'center'; ctx.fillText('沒有照片', x + CW/2, cy + CW/2); ctx.textAlign = 'left'; }
-        ctx.restore();
-        n++;
-        // 標籤
-        var bx = x + Math.round(14*s), bf = Math.round(28*s), bh = Math.round(46*s);
-        [[it.sale != null, it.saleEnd ? '特價 ~' + md(it.saleEnd) : '特價', '#c49a94'], [it.isNew, '新品', '#8e9fae']].forEach(function(b){
-          if(!b[0]) return;
-          ctx.font = '700 ' + bf + 'px ' + CARD_FONT;
-          var bw = ctx.measureText(b[1]).width + bf;
-          rrect(ctx, bx, cy + Math.round(14*s), bw, bh, Math.round(12*s)); ctx.fillStyle = b[2]; ctx.fill();
-          ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText(b[1], bx + bf/2, cy + Math.round(14*s) + bh/2 + 1); ctx.textBaseline = 'alphabetic';
-          bx += bw + Math.round(10*s);
-        });
-        // 名稱
-        var tx = x + ip, tw = CW - ip*2, ty = cy + CW + ip;
-        ctx.font = '600 ' + nameF + 'px ' + CARD_FONT; ctx.fillStyle = '#3d3a36';
-        wrapLines(ctx, it.name || '（未命名）', tw, 2).forEach(function(t, i){ ctx.fillText(t, tx, ty + nameF + i*lh); });
-        // 價錢
-        var py = ty + 2*lh + Math.round(10*s) + priceF - Math.round(6*s);
-        var main = it.sale != null ? it.sale : it.price;
-        ctx.font = '800 ' + priceF + 'px ' + CARD_FONT; ctx.fillStyle = it.sale != null ? '#a8807a' : '#3d3a36';
-        ctx.fillText(main != null ? yen(main) : '價格洽詢', tx, py);
-        if(it.sale != null && it.price != null){
-          var mw = ctx.measureText(yen(main)).width, old = yen(it.price);
-          ctx.font = Math.round(30*s) + 'px ' + CARD_FONT; ctx.fillStyle = '#8b857d';
-          var ow = ctx.measureText(old).width;
-          if(tx + mw + 14 + ow <= x + CW - ip){ ctx.fillText(old, tx + mw + 14, py - 2); ctx.fillRect(tx + mw + 12, py - Math.round(12*s), ow + 4, 2); }
-        }
-        // 補充：省多少 或 商品編號
-        ctx.font = (it.sale != null ? '700 ' : '') + metaF + 'px ' + CARD_FONT;
-        var my = py + Math.round(14*s) + metaF;
-        if(it.sale != null && it.price != null && it.price > it.sale){ ctx.fillStyle = '#a8807a'; ctx.fillText('省 ' + yen(it.price - it.sale) + (it.code ? '　#' + it.code : ''), tx, my); }
-        else { ctx.fillStyle = '#8b857d'; ctx.fillText(it.code ? '#' + it.code : '', tx, my); }
+    var y = HEAD;
+    list.forEach(function(it, k){
+      var col = k % cols, row = Math.floor(k / cols);
+      var x = PAD + col * (CW + GAP), cy = y + row * (CH + GAP);
+      ctx.save(); ctx.shadowColor = 'rgba(60,55,50,.10)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 4;
+      rrect(ctx, x, cy, CW, CH, 22); ctx.fillStyle = '#fbfaf7'; ctx.fill(); ctx.restore();
+      // 照片
+      ctx.save(); rrect(ctx, x, cy, CW, CW, 22); ctx.clip();
+      ctx.fillStyle = '#ebe6de'; ctx.fillRect(x, cy, CW, CW);
+      var img = imgs && imgs[k];
+      if(img){ var sc = Math.max(CW / img.naturalWidth, CW / img.naturalHeight), iw = img.naturalWidth*sc, ih = img.naturalHeight*sc;
+        ctx.drawImage(img, x + (CW - iw)/2, cy + (CW - ih)/2, iw, ih); }
+      else { ctx.fillStyle = '#8b857d'; ctx.font = Math.round(26*s) + 'px ' + CARD_FONT; ctx.textAlign = 'center'; ctx.fillText('沒有照片', x + CW/2, cy + CW/2); ctx.textAlign = 'left'; }
+      ctx.restore();
+      // 標籤
+      var bx = x + Math.round(14*s), bf = Math.round(28*s), bh = Math.round(46*s);
+      [[it.sale != null, it.saleEnd ? '特價 ~' + md(it.saleEnd) : '特價', '#c49a94'], [it.isNew, '新品', '#8e9fae']].forEach(function(b){
+        if(!b[0]) return;
+        ctx.font = '700 ' + bf + 'px ' + CARD_FONT;
+        var bw = ctx.measureText(b[1]).width + bf;
+        rrect(ctx, bx, cy + Math.round(14*s), bw, bh, Math.round(12*s)); ctx.fillStyle = b[2]; ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText(b[1], bx + bf/2, cy + Math.round(14*s) + bh/2 + 1); ctx.textBaseline = 'alphabetic';
+        bx += bw + Math.round(10*s);
       });
-      y += Math.ceil(sec.list.length / cols) * (CH + GAP);
+      // 名稱
+      var tx = x + ip, tw = CW - ip*2, ty = cy + CW + ip;
+      ctx.font = '600 ' + nameF + 'px ' + CARD_FONT; ctx.fillStyle = '#3d3a36';
+      wrapLines(ctx, it.name || '（未命名）', tw, 2).forEach(function(t, i){ ctx.fillText(t, tx, ty + nameF + i*lh); });
+      // 價錢
+      var py = ty + 2*lh + Math.round(10*s) + priceF - Math.round(6*s);
+      var main = it.sale != null ? it.sale : it.price;
+      ctx.font = '800 ' + priceF + 'px ' + CARD_FONT; ctx.fillStyle = it.sale != null ? '#a8807a' : '#3d3a36';
+      ctx.fillText(main != null ? yen(main) : '價格洽詢', tx, py);
+      if(it.sale != null && it.price != null){
+        var mw = ctx.measureText(yen(main)).width, old = yen(it.price);
+        ctx.font = Math.round(30*s) + 'px ' + CARD_FONT; ctx.fillStyle = '#8b857d';
+        var ow = ctx.measureText(old).width;
+        if(tx + mw + 14 + ow <= x + CW - ip){ ctx.fillText(old, tx + mw + 14, py - 2); ctx.fillRect(tx + mw + 12, py - Math.round(12*s), ow + 4, 2); }
+      }
+      // 補充：省多少 或 商品編號
+      ctx.font = (it.sale != null ? '700 ' : '') + metaF + 'px ' + CARD_FONT;
+      var my = py + Math.round(14*s) + metaF;
+      if(it.sale != null && it.price != null && it.price > it.sale){ ctx.fillStyle = '#a8807a'; ctx.fillText('省 ' + yen(it.price - it.sale) + (it.code ? '　#' + it.code : ''), tx, my); }
+      else { ctx.fillStyle = '#8b857d'; ctx.fillText(it.code ? '#' + it.code : '', tx, my); }
     });
     // 頁尾
-    y += 20;
-    ctx.fillStyle = '#e2ddd5'; ctx.fillRect(PAD, y, W - PAD*2, 2);
+    y += rows * (CH + GAP) + 20;
+    ctx.fillStyle = accent; ctx.fillRect(PAD, y, W - PAD*2, 3);
     ctx.fillStyle = '#3d3a36'; ctx.font = '600 32px ' + CARD_FONT;
     ctx.fillText('更多商品：' + location.host, PAD, y + 62);
     ctx.font = '24px ' + CARD_FONT; ctx.fillStyle = '#8b857d';
-    ctx.fillText('※ 價格為日本好市多現場價格（日幣），特價依期間為準，實際以購買當日現場為準', PAD, y + 112);
+    ctx.fillText(isSale ? '※ 價格為日本好市多現場價格（日幣），特價依期間為準，實際以購買當日現場為準'
+                        : '※ 價格為日本好市多現場價格（日幣），實際以購買當日現場為準', PAD, y + 112);
     return c;
   }
-  function makeFlyer(){
-    var L = flyerLists();
-    if(!L.sale.length && !L.news.length){ toast('目前沒有特價或新品商品'); return; }
-    var all = L.sale.concat(L.news);
-    loading(true, '製作傳單中…（' + all.length + ' 項）');
-    Promise.all(all.map(function(i){ return loadSquare(i.photos[0]); })).then(function(imgs){
-      return canvasBlob(drawFlyer(L, imgs)).catch(function(){ return canvasBlob(drawFlyer(L, null)); });
-    }).then(function(blob){
-      cardFile = new File([blob], '好市多特價新品傳單_' + today() + '.png', { type:'image/png' });
-      if(cardUrl) URL.revokeObjectURL(cardUrl);
-      cardUrl = URL.createObjectURL(blob);
+  function makeFlyer(type){
+    $('flyerPick').classList.remove('show');
+    var list = flyerList(type);
+    if(!list.length){ toast(type === 'sale' ? '目前沒有特價商品' : '目前沒有新品'); return; }
+    var pages = Math.ceil(list.length / FLYER_MAX), cols = list.length <= 6 ? 2 : 3;
+    var label = type === 'sale' ? '特價' : '新品上架';
+    loading(true, '製作' + label + '傳單中…（' + list.length + ' 項，' + pages + ' 張）');
+    var chunks = [];
+    for(var i = 0; i < list.length; i += FLYER_MAX) chunks.push(list.slice(i, i + FLYER_MAX));
+    var chain = Promise.resolve(), blobs = [];
+    chunks.forEach(function(chunk, p){
+      chain = chain.then(function(){
+        return Promise.all(chunk.map(function(it){ return loadSquare(it.photos[0]); }));
+      }).then(function(imgs){
+        return canvasBlob(drawFlyerPage(type, chunk, imgs, p + 1, pages, list.length, cols))
+          .catch(function(){ return canvasBlob(drawFlyerPage(type, chunk, null, p + 1, pages, list.length, cols)); });
+      }).then(function(b){ blobs.push(b); });
+    });
+    chain.then(function(){
+      flyerUrls.forEach(function(u){ URL.revokeObjectURL(u); });
+      flyerType = type;
+      flyerFiles = blobs.map(function(b, k){
+        return new File([b], '好市多' + label + '_' + today() + (pages > 1 ? '_' + (k + 1) + 'of' + pages : '') + '.png', { type:'image/png' });
+      });
+      flyerUrls = blobs.map(function(b){ return URL.createObjectURL(b); });
       cardMode = 'flyer';
-      $('cardImg').src = cardUrl;
-      cardCanShare = !!(navigator.canShare && navigator.share && navigator.canShare({ files:[cardFile] }));
-      $('cardShare').textContent = cardCanShare ? '分享／存相簿' : '下載傳單';
-      $('cardView').classList.add('show');
+      $('cardPages').innerHTML = flyerUrls.map(function(u, k){
+        return (pages > 1 ? '<div class="cv-pg">第 ' + (k + 1) + ' / ' + pages + ' 張</div>' : '') + '<img src="' + u + '" alt="傳單">';
+      }).join('');
+      cardCanShare = !!(navigator.canShare && navigator.share && navigator.canShare({ files:flyerFiles }));
+      $('cardShare').textContent = cardCanShare ? '分享／存相簿' + (pages > 1 ? '（' + pages + ' 張）' : '') : '下載傳單' + (pages > 1 ? '（' + pages + ' 張）' : '');
+      $('cardView').classList.add('show', 'multi');
+      $('cardPages').scrollTop = 0;
     }).catch(function(e){ toast('製作失敗：' + e.message); })
       .then(function(){ loading(false); });
   }
-  $('flyerBtn').addEventListener('click', makeFlyer);
+  $('flyerBtn').addEventListener('click', function(){
+    var ns = flyerList('sale').length, nn = flyerList('new').length;
+    $('fpSale').textContent = '特價傳單（' + ns + ' 項）'; $('fpSale').disabled = !ns;
+    $('fpNew').textContent = '新品上架傳單（' + nn + ' 項）'; $('fpNew').disabled = !nn;
+    $('flyerPick').classList.add('show');
+  });
+  $('fpSale').addEventListener('click', function(){ makeFlyer('sale'); });
+  $('fpNew').addEventListener('click', function(){ makeFlyer('new'); });
+  $('fpCancel').addEventListener('click', function(){ $('flyerPick').classList.remove('show'); });
+  $('flyerPick').addEventListener('click', function(e){ if(e.target === this) this.classList.remove('show'); });
 
   // ===== 設定 / 密碼 =====
   function openSettings(){
